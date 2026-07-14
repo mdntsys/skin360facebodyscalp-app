@@ -4,9 +4,7 @@ import * as React from "react";
 import { format, isToday } from "date-fns";
 
 import {
-  clientName,
-  serviceById,
-  staff,
+  useData,
   type Appointment,
   type LocationFilter,
   type StaffMember,
@@ -36,6 +34,8 @@ function StaffColumn({
   appointments: Appointment[];
   onSelect: (a: Appointment) => void;
 }) {
+  const { clientName, serviceById } = useData();
+
   const sorted = [...appointments].sort((a, b) =>
     a.startISO.localeCompare(b.startISO)
   );
@@ -117,6 +117,8 @@ export function DayView({
   locationFilter: LocationFilter;
   onSelect: (a: Appointment) => void;
 }) {
+  const { staff } = useData();
+
   // Client-only clock so the "now" line never mismatches on hydration.
   const [now, setNow] = React.useState<Date | null>(null);
   React.useEffect(() => {

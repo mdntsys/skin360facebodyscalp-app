@@ -3,14 +3,7 @@
 import * as React from "react";
 import { format, isToday } from "date-fns";
 
-import {
-  clientName,
-  formatCurrency,
-  locationById,
-  serviceById,
-  staffById,
-  type Appointment,
-} from "@/data";
+import { formatCurrency, useData, type Appointment } from "@/data";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -33,6 +26,8 @@ export function ListView({
   appointments: Appointment[];
   onSelect: (a: Appointment) => void;
 }) {
+  const { clientName, serviceById, staffById, locationById } = useData();
+
   const groups = React.useMemo(() => {
     const sorted = [...appointments].sort((a, b) =>
       a.startISO.localeCompare(b.startISO)

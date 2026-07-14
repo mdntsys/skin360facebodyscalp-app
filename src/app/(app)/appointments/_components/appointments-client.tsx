@@ -14,10 +14,9 @@ import {
 import { toast } from "sonner";
 
 import {
-  appointments as seedAppointments,
-  clientName,
   formatCurrency,
   matchesLocation,
+  useData,
   type Appointment,
   type AppointmentStatus,
 } from "@/data";
@@ -44,8 +43,8 @@ export function AppointmentsClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { location } = useLocationFilter();
+  const { appointments, clientName, updateAppointmentStatus } = useData();
 
-  const [appts, setAppts] = React.useState<Appointment[]>(seedAppointments);
   const [view, setView] = React.useState<ViewMode>("day");
   const [selectedDate, setSelectedDate] = React.useState(() => new Date());
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
@@ -67,8 +66,8 @@ export function AppointmentsClient() {
   );
 
   const visible = React.useMemo(
-    () => appts.filter((a) => matchesLocation(a.locationId, location)),
-    [appts, location]
+    () => appointments.filter((a) => matchesLocation(a.locationId, location)),
+    [appointments, location]
   );
 
   const viewWeekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
@@ -95,13 +94,19 @@ export function AppointmentsClient() {
       ? format(selectedDate, "EEEE, MMMM d")
       : `${format(viewWeekStart, "MMM d")} – ${format(addDays(viewWeekStart, 6), "MMM d")}`;
 
-  const selectedAppointment = appts.find((a) => a.id === selectedId) ?? null;
+  const selectedAppointment =
+    appointments.find((a) => a.id === selectedId) ?? null;
 
   const updateStatus = React.useCallback(
-    (id: string, status: AppointmentStatus) => {
-      const target = appts.find((a) => a.id === id);
-      setAppts((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
+    async (id: string, status: AppointmentStatus) => {
+      const target = appointments.find((a) => a.id === id);
       const name = target ? clientName(target.clientId) : "Client";
+      try {
+        await updateAppointmentStatus(id, status);
+      } catch {
+        toast.error(`Couldn't update the appointment for ${name}. Please try again.`);
+        return;
+      }
       if (status === "checked-in") {
         toast.success(`${name} checked in`);
       } else if (status === "completed") {
@@ -111,20 +116,22 @@ export function AppointmentsClient() {
         setSelectedId(null);
       }
     },
-    [appts]
+    [appointments, clientName, updateAppointmentStatus]
   );
 
-  const handleCreate = React.useCallback((appt: Appointment) => {
-    setAppts((prev) => [...prev, appt]);
-    const start = new Date(appt.startISO);
-    setSelectedDate(start);
-    toast.success(
-      `Appointment booked for ${clientName(appt.clientId)} · ${format(
-        start,
-        "EEE, MMM d 'at' h:mm a"
-      )}`
-    );
-  }, []);
+  const handleCreated = React.useCallback(
+    (appt: Appointment) => {
+      const start = new Date(appt.startISO);
+      setSelectedDate(start);
+      toast.success(
+        `Appointment booked for ${clientName(appt.clientId)} · ${format(
+          start,
+          "EEE, MMM d 'at' h:mm a"
+        )}`
+      );
+    },
+    [clientName]
+  );
 
   return (
     <>
@@ -232,7 +239,7 @@ export function AppointmentsClient() {
         open={newOpen}
         onOpenChange={handleNewOpenChange}
         defaultLocation={location}
-        onCreate={handleCreate}
+        onCreate={handleCreated}
       />
     </>
   );

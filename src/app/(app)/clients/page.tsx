@@ -6,12 +6,7 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ChevronRight, Search, Users } from "lucide-react";
 
-import {
-  clients as seededClients,
-  members,
-  type Client,
-  type ClientTag,
-} from "@/data";
+import { useData, type Client, type ClientTag } from "@/data";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
@@ -39,18 +34,18 @@ const headClass =
 
 export default function ClientsPage() {
   const router = useRouter();
-  const [added, setAdded] = React.useState<Client[]>([]);
+  const { clients, members } = useData();
   const [search, setSearch] = React.useState("");
   const [tag, setTag] = React.useState<TagFilter>("All");
 
   const allClients = React.useMemo(
     () =>
-      [...seededClients, ...added].sort((a, b) =>
+      [...clients].sort((a, b) =>
         `${a.firstName} ${a.lastName}`.localeCompare(
           `${b.firstName} ${b.lastName}`
         )
       ),
-    [added]
+    [clients]
   );
 
   const q = search.trim().toLowerCase();
@@ -72,7 +67,7 @@ export default function ClientsPage() {
         title="Clients"
         subtitle={`${allClients.length} clients · ${members.length} members`}
         actions={
-          <AddClientDialog onAdd={(c) => setAdded((prev) => [...prev, c])} />
+          <AddClientDialog onCreated={(c) => router.push(`/clients/${c.id}`)} />
         }
       />
 
@@ -111,7 +106,13 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {allClients.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="No clients yet"
+          description="Your book is a blank page — use “Add Client” above to welcome your first."
+        />
+      ) : filtered.length === 0 ? (
         <EmptyState
           icon={Users}
           title="No clients found"

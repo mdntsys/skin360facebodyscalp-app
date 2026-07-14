@@ -2,18 +2,10 @@
 
 import * as React from "react";
 import { format } from "date-fns";
-import { Check, Plus, Users } from "lucide-react";
+import { Check, Plus, Sparkles, Users } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  clientById,
-  formatCurrency,
-  members,
-  membershipPlans,
-  planById,
-  type MemberStatus,
-  type MembershipPlan,
-} from "@/data";
+import { formatCurrency, useData, type MemberStatus } from "@/data";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -42,39 +34,41 @@ const statusFilters: { value: StatusFilter; label: string }[] = [
   { value: "past-due", label: "Past due" },
 ];
 
-// The most premium seeded plan gets the special treatment.
-const premiumPlanId = membershipPlans.reduce((a, b) =>
-  b.monthlyPrice > a.monthlyPrice ? b : a
-).id;
-
-function clientInitials(clientId: string): string {
-  const client = clientById.get(clientId);
-  return client
-    ? `${client.firstName.charAt(0)}${client.lastName.charAt(0)}`
-    : "?";
-}
-
 export default function MembershipsPage() {
-  const [plans, setPlans] = React.useState<MembershipPlan[]>(membershipPlans);
+  const {
+    membershipPlans: plans,
+    members,
+    clientById,
+    planById,
+    createMembershipPlan,
+  } = useData();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all");
+
+  // The most premium plan gets the special treatment.
+  const premiumPlanId =
+    plans.length > 1
+      ? plans.reduce((a, b) => (b.monthlyPrice > a.monthlyPrice ? b : a)).id
+      : null;
 
   const visibleMembers = members.filter(
     (m) => statusFilter === "all" || m.status === statusFilter
   );
 
-  function handleCreate(values: PlanFormValues) {
-    setPlans((prev) => [
-      ...prev,
-      {
-        id: `plan-local-${Date.now()}`,
-        name: values.name,
-        monthlyPrice: values.monthlyPrice,
-        billingCycle: values.billingCycle,
-        perks: values.perks,
-        activeMembers: 0,
-      },
-    ]);
+  const membersEmptyMessage =
+    members.length === 0
+      ? "No members yet — clients will appear here once they join a plan."
+      : "No members with this status.";
+
+  function clientInitials(clientId: string): string {
+    const client = clientById.get(clientId);
+    return client
+      ? `${client.firstName.charAt(0)}${client.lastName.charAt(0)}`
+      : "?";
+  }
+
+  async function handleCreate(values: PlanFormValues) {
+    await createMembershipPlan(values);
     toast.success(`“${values.name}” membership created.`);
   }
 
@@ -82,7 +76,7 @@ export default function MembershipsPage() {
     <>
       <PageHeader
         title="Memberships"
-        subtitle={`${plans.length} plans · ${members.length} members`}
+        subtitle={`${plans.length} ${plans.length === 1 ? "plan" : "plans"} · ${members.length} ${members.length === 1 ? "member" : "members"}`}
         actions={
           <Button onClick={() => setDialogOpen(true)}>
             <Plus data-icon="inline-start" strokeWidth={1.75} />
@@ -92,65 +86,84 @@ export default function MembershipsPage() {
       />
 
       {/* Section 1 — Plans */}
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {plans.map((plan) => {
-          const isPremium = plan.id === premiumPlanId;
-          return (
-            <Card
-              key={plan.id}
-              className={cn(
-                "flex flex-col border-line bg-white shadow-xs",
-                isPremium && "ring-1 ring-gold-300"
-              )}
-            >
-              <CardContent className="flex-1 p-6">
-                {isPremium && (
-                  <span className="mb-3 inline-flex items-center rounded-full border border-gold-200 bg-gold-50 px-3 py-0.5 text-[11px] tracking-wide text-gold-700 uppercase">
-                    Most Premium
-                  </span>
+      {plans.length === 0 ? (
+        <Card className="border-line bg-white shadow-xs">
+          <CardContent className="flex flex-col items-center px-6 py-14 text-center">
+            <div className="flex size-12 items-center justify-center rounded-full bg-gold-50">
+              <Sparkles className="size-5 text-gold-600" strokeWidth={1.75} />
+            </div>
+            <h3 className="mt-4 text-2xl text-ink">No membership plans yet</h3>
+            <p className="mt-1 max-w-sm text-sm font-light text-muted-warm">
+              Reward your regulars with a recurring plan — a monthly treatment,
+              member pricing, and perks that keep them glowing.
+            </p>
+            <Button className="mt-6" onClick={() => setDialogOpen(true)}>
+              <Plus data-icon="inline-start" strokeWidth={1.75} />
+              Create your first membership
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {plans.map((plan) => {
+            const isPremium = plan.id === premiumPlanId;
+            return (
+              <Card
+                key={plan.id}
+                className={cn(
+                  "flex flex-col border-line bg-white shadow-xs",
+                  isPremium && "ring-1 ring-gold-300"
                 )}
-                <h3 className="text-2xl text-ink">{plan.name}</h3>
-                <div className="mt-3 flex items-baseline gap-1">
-                  <span className="font-heading text-4xl text-ink">
-                    {formatCurrency(plan.monthlyPrice)}
-                  </span>
-                  <span className="text-sm font-light text-muted-warm">
-                    /month
-                  </span>
-                </div>
-                <p className="mt-1 text-xs font-light tracking-wide text-muted-warm uppercase">
-                  Billed {plan.billingCycle.toLowerCase()}
-                </p>
-                <ul className="mt-5 space-y-2.5">
-                  {plan.perks.map((perk) => (
-                    <li key={perk} className="flex items-start gap-2.5">
-                      <Check
-                        className="mt-0.5 size-4 shrink-0 text-gold-600"
-                        strokeWidth={1.75}
-                      />
-                      <span className="text-sm font-light text-ink-soft">
-                        {perk}
-                      </span>
-                    </li>
-                  ))}
-                  {plan.perks.length === 0 && (
-                    <li className="text-sm font-light text-muted-warm">
-                      No perks added yet.
-                    </li>
+              >
+                <CardContent className="flex-1 p-6">
+                  {isPremium && (
+                    <span className="mb-3 inline-flex items-center rounded-full border border-gold-200 bg-gold-50 px-3 py-0.5 text-[11px] tracking-wide text-gold-700 uppercase">
+                      Most Premium
+                    </span>
                   )}
-                </ul>
-              </CardContent>
-              <CardFooter className="border-t border-line/70 px-6 py-4">
-                <p className="flex items-center gap-2 text-xs font-light text-muted-warm">
-                  <Users className="size-3.5 text-gold-600" strokeWidth={1.75} />
-                  {plan.activeMembers} active{" "}
-                  {plan.activeMembers === 1 ? "member" : "members"}
-                </p>
-              </CardFooter>
-            </Card>
-          );
-        })}
-      </div>
+                  <h3 className="text-2xl text-ink">{plan.name}</h3>
+                  <div className="mt-3 flex items-baseline gap-1">
+                    <span className="font-heading text-4xl text-ink">
+                      {formatCurrency(plan.monthlyPrice)}
+                    </span>
+                    <span className="text-sm font-light text-muted-warm">
+                      /month
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs font-light tracking-wide text-muted-warm uppercase">
+                    Billed {plan.billingCycle.toLowerCase()}
+                  </p>
+                  <ul className="mt-5 space-y-2.5">
+                    {plan.perks.map((perk) => (
+                      <li key={perk} className="flex items-start gap-2.5">
+                        <Check
+                          className="mt-0.5 size-4 shrink-0 text-gold-600"
+                          strokeWidth={1.75}
+                        />
+                        <span className="text-sm font-light text-ink-soft">
+                          {perk}
+                        </span>
+                      </li>
+                    ))}
+                    {plan.perks.length === 0 && (
+                      <li className="text-sm font-light text-muted-warm">
+                        No perks added yet.
+                      </li>
+                    )}
+                  </ul>
+                </CardContent>
+                <CardFooter className="border-t border-line/70 px-6 py-4">
+                  <p className="flex items-center gap-2 text-xs font-light text-muted-warm">
+                    <Users className="size-3.5 text-gold-600" strokeWidth={1.75} />
+                    {plan.activeMembers} active{" "}
+                    {plan.activeMembers === 1 ? "member" : "members"}
+                  </p>
+                </CardFooter>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Section 2 — Members */}
       <div className="mt-10">
@@ -206,7 +219,7 @@ export default function MembershipsPage() {
                         colSpan={5}
                         className="px-4 py-10 text-center text-sm font-light text-muted-warm"
                       >
-                        No members with this status.
+                        {membersEmptyMessage}
                       </TableCell>
                     </TableRow>
                   )}
@@ -255,7 +268,7 @@ export default function MembershipsPage() {
           {visibleMembers.length === 0 && (
             <Card className="border-line bg-white shadow-xs">
               <CardContent className="py-10 text-center text-sm font-light text-muted-warm">
-                No members with this status.
+                {membersEmptyMessage}
               </CardContent>
             </Card>
           )}

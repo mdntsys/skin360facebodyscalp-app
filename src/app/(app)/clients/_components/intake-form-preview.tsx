@@ -3,7 +3,7 @@
 import { format } from "date-fns";
 import { Check } from "lucide-react";
 
-import { locationById, type Client, type IntakeForm } from "@/data";
+import { useData, type Client, type IntakeForm } from "@/data";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -74,6 +74,7 @@ export function IntakeFormPreviewDialog({
   client: Client;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { locationById } = useData();
   const home = locationById.get(client.homeLocation);
   const skinHistory = [
     {

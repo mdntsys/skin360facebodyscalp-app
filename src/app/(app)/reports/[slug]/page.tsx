@@ -4,9 +4,17 @@ import * as React from "react";
 import Link from "next/link";
 import {
   addDays,
+  addMonths,
   differenceInCalendarDays,
+  endOfMonth,
+  endOfQuarter,
+  endOfWeek,
   format,
+  getQuarter,
+  isSameDay,
+  isSameMonth,
   parseISO,
+  startOfWeek,
   subDays,
   subMonths,
 } from "date-fns";
@@ -57,17 +65,9 @@ import {
 import { toast } from "sonner";
 
 import {
-  appointments,
-  clientName,
-  clients,
-  expenses,
   formatCurrency,
-  payments,
-  products,
-  serviceById,
-  staff,
-  staffById,
-  weekStart,
+  revenueTrend,
+  useData,
   type PaymentMethod,
 } from "@/data";
 import { cn } from "@/lib/utils";
@@ -111,7 +111,6 @@ import {
 /* ------------------------------------------------------------------ */
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const isoDaysAgo = (n: number) => format(subDays(new Date(), n), "yyyy-MM-dd");
 
 const goldPalette = [
   "var(--chart-1)",
@@ -151,6 +150,33 @@ function SectionCard({
   );
 }
 
+function EmptyNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="py-10 text-center text-sm font-light text-muted-warm">
+      {children}
+    </p>
+  );
+}
+
+function EmptyRow({
+  colSpan,
+  children,
+}: {
+  colSpan: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <TableRow className="hover:bg-transparent">
+      <TableCell
+        colSpan={colSpan}
+        className="py-10 text-center text-sm font-light text-muted-warm"
+      >
+        {children}
+      </TableCell>
+    </TableRow>
+  );
+}
+
 function ReportControls() {
   const [range, setRange] = React.useState("last-30");
   return (
@@ -186,26 +212,19 @@ const salesChartConfig = {
 } satisfies ChartConfig;
 
 function SalesReport() {
-  const gross = payments.reduce((s, p) => s + p.total, 0);
-  const taxTotal = payments.reduce((s, p) => s + p.tax, 0);
-  const tips = payments.reduce((s, p) => s + p.tip, 0);
-  const net = gross - taxTotal;
-  const avgTicket = gross / payments.length;
+  const { appointments, payments, clientName } = useData();
 
-  const byDate = new Map<string, number>();
-  for (const p of payments) {
-    byDate.set(p.dateISO, (byDate.get(p.dateISO) ?? 0) + p.total);
-  }
-  const daily = Array.from({ length: 14 }, (_, i) => {
-    const date = subDays(new Date(), 13 - i);
-    const key = format(date, "yyyy-MM-dd");
-    return {
-      label: format(date, "MMM d"),
-      revenue: round2(byDate.get(key) ?? 0),
-    };
-  });
+  const gross = round2(payments.reduce((s, p) => s + p.total, 0));
+  const taxTotal = round2(payments.reduce((s, p) => s + p.tax, 0));
+  const tips = round2(payments.reduce((s, p) => s + p.tip, 0));
+  const net = round2(gross - taxTotal);
+  const avgTicket = payments.length ? gross / payments.length : 0;
 
-  const rows = [...payments].sort((a, b) => (a.dateISO < b.dateISO ? 1 : -1));
+  const daily = revenueTrend(appointments, payments, 14);
+
+  const rows = [...payments].sort(
+    (a, b) => new Date(b.dateISO).getTime() - new Date(a.dateISO).getTime()
+  );
 
   return (
     <>
@@ -214,7 +233,7 @@ function SalesReport() {
           label="Gross Revenue"
           value={formatCurrency(gross)}
           icon={DollarSign}
-          hint={`${payments.length} transactions · last 90 days`}
+          hint={`${payments.length} transaction${payments.length === 1 ? "" : "s"} recorded`}
         />
         <StatCard
           label="Net Revenue"
@@ -239,7 +258,7 @@ function SalesReport() {
 
       <SectionCard
         title="Daily Revenue"
-        hint="Last 14 days · all transaction types"
+        hint="Last 14 days · completed appointments & other sales"
         className="mt-6"
       >
         <ChartContainer config={salesChartConfig} className="h-64 w-full">
@@ -308,13 +327,16 @@ function SalesReport() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {rows.length === 0 && (
+              <EmptyRow colSpan={6}>No transactions recorded yet.</EmptyRow>
+            )}
             {rows.map((p) => (
               <TableRow key={p.id}>
                 <TableCell className="whitespace-nowrap text-muted-warm">
                   {format(parseISO(p.dateISO), "MMM d, yyyy")}
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
-                  {clientName(p.clientId)}
+                  {p.clientId ? clientName(p.clientId) : "Walk-in"}
                 </TableCell>
                 <TableCell className="max-w-[280px] truncate font-light text-ink-soft">
                   {p.description}
@@ -346,18 +368,28 @@ const appointmentsChartConfig = {
 } satisfies ChartConfig;
 
 function AppointmentsReport() {
-  const completed = appointments.filter((a) => a.status === "completed");
-  const cancelled = appointments.filter((a) => a.status === "cancelled");
-  const noShows = appointments.filter((a) => a.status === "no-show");
+  const { appointments, clientName, serviceById, staffById } = useData();
+
+  const now = new Date();
+  const weekStartsAt = startOfWeek(now, { weekStartsOn: 1 });
+  const weekEndsAt = endOfWeek(now, { weekStartsOn: 1 });
+  const thisWeek = appointments.filter((a) => {
+    const d = new Date(a.startISO);
+    return d >= weekStartsAt && d <= weekEndsAt;
+  });
+
+  const completed = thisWeek.filter((a) => a.status === "completed");
+  const cancelled = thisWeek.filter((a) => a.status === "cancelled");
+  const noShows = thisWeek.filter((a) => a.status === "no-show");
 
   const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const perDay = weekdays.map((day) => ({ day, count: 0 }));
-  for (const a of appointments) {
+  for (const a of thisWeek) {
     const idx = (new Date(a.startISO).getDay() + 6) % 7;
     perDay[idx].count += 1;
   }
 
-  const rows = [...appointments].sort(
+  const rows = [...thisWeek].sort(
     (a, b) => new Date(a.startISO).getTime() - new Date(b.startISO).getTime()
   );
 
@@ -366,7 +398,7 @@ function AppointmentsReport() {
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard
           label="Total Appointments"
-          value={appointments.length}
+          value={thisWeek.length}
           icon={CalendarDays}
           hint="This week · both locations"
         />
@@ -381,7 +413,7 @@ function AppointmentsReport() {
           label="Cancelled"
           value={cancelled.length}
           icon={XCircle}
-          hint="Client rescheduling"
+          hint={cancelled.length ? "Client rescheduling" : "None this week"}
         />
         <StatCard
           label="No-shows"
@@ -445,6 +477,11 @@ function AppointmentsReport() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {rows.length === 0 && (
+              <EmptyRow colSpan={7}>
+                No appointments on the books this week.
+              </EmptyRow>
+            )}
             {rows.map((a) => {
               const start = new Date(a.startISO);
               return (
@@ -488,53 +525,38 @@ const retailChartConfig = {
   revenue: { label: "Revenue", color: "var(--color-gold)" },
 } satisfies ChartConfig;
 
-const productById = new Map(products.map((p) => [p.id, p]));
-
-// Retail lines: the two retail payments from the payment history (pay-21,
-// pay-25 split across its two products) plus boutique walk-in purchases.
-const retailLines = [
-  { id: "rl-01", dateISO: isoDaysAgo(3), clientId: "cl-04", productId: "prod-05", qty: 1, amount: 48 },
-  { id: "rl-02", dateISO: isoDaysAgo(8), clientId: "cl-18", productId: "prod-03", qty: 1, amount: 85 },
-  { id: "rl-03", dateISO: isoDaysAgo(12), clientId: "cl-09", productId: "prod-13", qty: 1, amount: 34 },
-  { id: "rl-04", dateISO: isoDaysAgo(19), clientId: "cl-01", productId: "prod-17", qty: 2, amount: 64 },
-  { id: "rl-05", dateISO: isoDaysAgo(32), clientId: "cl-07", productId: "prod-01", qty: 2, amount: 136 },
-  { id: "rl-06", dateISO: isoDaysAgo(55), clientId: "cl-14", productId: "prod-08", qty: 1, amount: 42 },
-  { id: "rl-07", dateISO: isoDaysAgo(55), clientId: "cl-14", productId: "prod-09", qty: 1, amount: 56 },
-];
-
 function RetailSalesReport() {
-  const units = retailLines.reduce((s, l) => s + l.qty, 0);
-  const revenue = retailLines.reduce((s, l) => s + l.amount, 0);
-  const avgSale = revenue / retailLines.length;
+  const { payments, clientName } = useData();
 
-  const perProduct = new Map<string, number>();
-  const perCategory = new Map<string, number>();
-  for (const l of retailLines) {
-    const product = productById.get(l.productId);
-    if (!product) continue;
-    perProduct.set(product.name, (perProduct.get(product.name) ?? 0) + l.amount);
-    perCategory.set(
-      product.category,
-      (perCategory.get(product.category) ?? 0) + l.amount
-    );
-  }
-  const topProduct = [...perProduct.entries()].sort((a, b) => b[1] - a[1])[0];
-  const byCategory = [...perCategory.entries()]
-    .map(([category, catRevenue]) => ({ category, revenue: catRevenue }))
-    .sort((a, b) => b.revenue - a.revenue);
+  const retail = payments.filter((p) => p.kind === "retail");
+  const revenue = round2(retail.reduce((s, p) => s + p.subtotal, 0));
+  const avgSale = retail.length ? revenue / retail.length : 0;
+  const largest = [...retail].sort((a, b) => b.subtotal - a.subtotal)[0];
 
-  const rows = [...retailLines].sort((a, b) =>
-    a.dateISO < b.dateISO ? 1 : -1
+  const daily = Array.from({ length: 14 }, (_, i) => {
+    const day = subDays(new Date(), 13 - i);
+    return {
+      label: format(day, "MMM d"),
+      revenue: round2(
+        retail
+          .filter((p) => isSameDay(new Date(p.dateISO), day))
+          .reduce((s, p) => s + p.subtotal, 0)
+      ),
+    };
+  });
+
+  const rows = [...retail].sort(
+    (a, b) => new Date(b.dateISO).getTime() - new Date(a.dateISO).getTime()
   );
 
   return (
     <>
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard
-          label="Units Sold"
-          value={units}
+          label="Retail Transactions"
+          value={retail.length}
           icon={ShoppingBag}
-          hint="Last 90 days"
+          hint="All recorded"
         />
         <StatCard
           label="Retail Revenue"
@@ -546,34 +568,35 @@ function RetailSalesReport() {
           label="Avg Sale"
           value={formatCurrency(avgSale, { cents: true })}
           icon={ReceiptText}
-          hint="Per retail line"
+          hint="Per transaction"
         />
         <StatCard
-          label="Top Product"
+          label="Largest Sale"
           value={
             <span className="text-lg leading-snug">
-              {topProduct ? topProduct[0] : "—"}
+              {largest ? largest.description : "—"}
             </span>
           }
           icon={Star}
-          hint={topProduct ? formatCurrency(topProduct[1]) : undefined}
+          hint={largest ? formatCurrency(largest.subtotal) : undefined}
           hintTone="positive"
         />
       </div>
 
       <SectionCard
-        title="Revenue by Product Category"
-        hint="Retail lines · last 90 days"
+        title="Retail Revenue by Day"
+        hint="Last 14 days · retail transactions only"
         className="mt-6"
       >
         <ChartContainer config={retailChartConfig} className="h-64 w-full">
-          <BarChart data={byCategory} margin={{ left: 4, right: 12, top: 8 }}>
+          <BarChart data={daily} margin={{ left: 4, right: 12, top: 8 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" />
             <XAxis
-              dataKey="category"
+              dataKey="label"
               tickLine={false}
               axisLine={false}
               tickMargin={8}
+              interval="preserveStartEnd"
             />
             <YAxis
               tickLine={false}
@@ -609,28 +632,31 @@ function RetailSalesReport() {
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Client</TableHead>
-              <TableHead>Product</TableHead>
-              <TableHead className="text-right">Qty</TableHead>
-              <TableHead className="text-right">Price</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Method</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((l) => (
-              <TableRow key={l.id}>
+            {rows.length === 0 && (
+              <EmptyRow colSpan={5}>No retail sales recorded yet.</EmptyRow>
+            )}
+            {rows.map((p) => (
+              <TableRow key={p.id}>
                 <TableCell className="whitespace-nowrap text-muted-warm">
-                  {format(parseISO(l.dateISO), "MMM d, yyyy")}
+                  {format(parseISO(p.dateISO), "MMM d, yyyy")}
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
-                  {clientName(l.clientId)}
+                  {p.clientId ? clientName(p.clientId) : "Walk-in"}
                 </TableCell>
                 <TableCell className="max-w-[280px] truncate font-light text-ink-soft">
-                  {productById.get(l.productId)?.name}
+                  {p.description}
+                </TableCell>
+                <TableCell className="whitespace-nowrap font-light">
+                  {p.method}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
-                  {l.qty}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {formatCurrency(l.amount)}
+                  {formatCurrency(p.subtotal, { cents: true })}
                 </TableCell>
               </TableRow>
             ))}
@@ -650,23 +676,27 @@ const taxChartConfig = {
 } satisfies ChartConfig;
 
 function SalesTaxReport() {
+  const { payments } = useData();
+
+  const now = new Date();
   const taxed = payments.filter((p) => p.tax > 0);
   const taxCollected = round2(taxed.reduce((s, p) => s + p.tax, 0));
-  const taxableSales = round2(taxCollected / 0.095);
+  const taxableSales = round2(taxed.reduce((s, p) => s + p.subtotal, 0));
 
-  // Deterministic prior-month taxable retail sales (mock history).
-  const priorTaxable = [412, 386, 447, 528, 471];
   const months = Array.from({ length: 6 }, (_, i) => {
-    const date = subMonths(new Date(), 5 - i);
-    const taxable = i < 5 ? priorTaxable[i] : Math.round(taxableSales);
+    const date = subMonths(now, 5 - i);
+    const inMonth = taxed.filter((p) => isSameMonth(new Date(p.dateISO), date));
     return {
       label: format(date, "MMM"),
       month: format(date, "MMMM yyyy"),
-      taxable,
-      tax: Math.round(taxable * 9.5) / 100,
+      taxable: round2(inMonth.reduce((s, p) => s + p.subtotal, 0)),
+      tax: round2(inMonth.reduce((s, p) => s + p.tax, 0)),
       due: i === 5,
     };
   });
+
+  // CDTFA quarterly returns are due the last day of the month after quarter end.
+  const filingDue = endOfMonth(addMonths(endOfQuarter(now), 1));
 
   return (
     <>
@@ -675,13 +705,13 @@ function SalesTaxReport() {
           label="Taxable Sales"
           value={formatCurrency(taxableSales)}
           icon={DollarSign}
-          hint={`${taxed.length} taxable transactions`}
+          hint={`${taxed.length} taxable transaction${taxed.length === 1 ? "" : "s"}`}
         />
         <StatCard
           label="Tax Collected"
           value={formatCurrency(taxCollected, { cents: true })}
           icon={Landmark}
-          hint="Current period"
+          hint="All recorded"
         />
         <StatCard
           label="Tax Rate"
@@ -691,9 +721,9 @@ function SalesTaxReport() {
         />
         <StatCard
           label="Filings Due"
-          value="Oct 31"
+          value={format(filingDue, "MMM d")}
           icon={CalendarClock}
-          hint="Q3 CDTFA return"
+          hint={`Q${getQuarter(now)} CDTFA return`}
         />
       </div>
 
@@ -765,17 +795,23 @@ function SalesTaxReport() {
                   {formatCurrency(m.tax, { cents: true })}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "rounded-full border px-2.5 py-0.5 text-[11px] font-normal",
-                      m.due
-                        ? "border-amber-200 bg-amber-50 text-amber-700"
-                        : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    )}
-                  >
-                    {m.due ? "Due" : "Filed"}
-                  </Badge>
+                  {m.due || m.tax > 0 ? (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "rounded-full border px-2.5 py-0.5 text-[11px] font-normal",
+                        m.due
+                          ? "border-amber-200 bg-amber-50 text-amber-700"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      )}
+                    >
+                      {m.due ? "Due" : "Filed"}
+                    </Badge>
+                  ) : (
+                    <span className="text-xs font-light text-muted-warm">
+                      —
+                    </span>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -795,6 +831,8 @@ const inventoryChartConfig = {
 } satisfies ChartConfig;
 
 function InventoryReport() {
+  const { products } = useData();
+
   const units = products.reduce((s, p) => s + p.inStock, 0);
   const retailValue = products.reduce(
     (s, p) => s + p.inStock * p.retailPrice,
@@ -849,41 +887,45 @@ function InventoryReport() {
         hint="Units on hand × retail price"
         className="mt-6"
       >
-        <ChartContainer config={inventoryChartConfig} className="h-64 w-full">
-          <BarChart
-            data={topCategories}
-            layout="vertical"
-            margin={{ left: 8, right: 16, top: 8 }}
-          >
-            <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-            <XAxis
-              type="number"
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(v: number) => `$${v}`}
-            />
-            <YAxis
-              type="category"
-              dataKey="category"
-              tickLine={false}
-              axisLine={false}
-              width={92}
-            />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  formatter={(value) => formatCurrency(Number(value))}
-                />
-              }
-            />
-            <Bar isAnimationActive={false}
-              dataKey="value"
-              fill="var(--color-gold)"
-              radius={[0, 6, 6, 0]}
-              maxBarSize={26}
-            />
-          </BarChart>
-        </ChartContainer>
+        {topCategories.length === 0 ? (
+          <EmptyNote>No products in inventory yet.</EmptyNote>
+        ) : (
+          <ChartContainer config={inventoryChartConfig} className="h-64 w-full">
+            <BarChart
+              data={topCategories}
+              layout="vertical"
+              margin={{ left: 8, right: 16, top: 8 }}
+            >
+              <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+              <XAxis
+                type="number"
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v: number) => `$${v}`}
+              />
+              <YAxis
+                type="category"
+                dataKey="category"
+                tickLine={false}
+                axisLine={false}
+                width={92}
+              />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    formatter={(value) => formatCurrency(Number(value))}
+                  />
+                }
+              />
+              <Bar isAnimationActive={false}
+                dataKey="value"
+                fill="var(--color-gold)"
+                radius={[0, 6, 6, 0]}
+                maxBarSize={26}
+              />
+            </BarChart>
+          </ChartContainer>
+        )}
       </SectionCard>
 
       <SectionCard
@@ -904,6 +946,9 @@ function InventoryReport() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {products.length === 0 && (
+              <EmptyRow colSpan={6}>No products in inventory yet.</EmptyRow>
+            )}
             {products.map((p) => (
               <TableRow key={p.id}>
                 <TableCell className="max-w-[280px] truncate">
@@ -957,6 +1002,8 @@ const methodKey: Record<PaymentMethod, "card" | "cash" | "gift" | "credit"> = {
 };
 
 function TransactionDetailReport() {
+  const { payments, clientName } = useData();
+
   interface TxnLine {
     key: string;
     dateISO: string;
@@ -968,10 +1015,12 @@ function TransactionDetailReport() {
     amount: number;
   }
 
-  const sorted = [...payments].sort((a, b) => (a.dateISO < b.dateISO ? 1 : -1));
+  const sorted = [...payments].sort(
+    (a, b) => new Date(b.dateISO).getTime() - new Date(a.dateISO).getTime()
+  );
   const lines: TxnLine[] = [];
   for (const p of sorted) {
-    const txn = p.id.replace("pay-", "TXN-10");
+    const txn = p.id.slice(0, 8).toUpperCase();
     lines.push({
       key: `${p.id}-main`,
       dateISO: p.dateISO,
@@ -1010,8 +1059,12 @@ function TransactionDetailReport() {
 
   const cardCount = payments.filter((p) => p.method === "Card").length;
   const cashCount = payments.filter((p) => p.method === "Cash").length;
-  const cardPct = Math.round((cardCount / payments.length) * 100);
-  const cashPct = Math.round((cashCount / payments.length) * 100);
+  const cardPct = payments.length
+    ? Math.round((cardCount / payments.length) * 100)
+    : 0;
+  const cashPct = payments.length
+    ? Math.round((cashCount / payments.length) * 100)
+    : 0;
 
   const weeks = Array.from({ length: 8 }, (_, idx) => ({
     label: format(subDays(new Date(), (7 - idx) * 7), "MMM d"),
@@ -1022,6 +1075,7 @@ function TransactionDetailReport() {
   }));
   for (const p of payments) {
     const daysAgo = differenceInCalendarDays(new Date(), parseISO(p.dateISO));
+    if (daysAgo < 0 || daysAgo > 55) continue;
     const wk = Math.min(7, Math.max(0, Math.floor(daysAgo / 7)));
     weeks[7 - wk][methodKey[p.method]] += p.total;
   }
@@ -1039,7 +1093,7 @@ function TransactionDetailReport() {
           label="Transactions"
           value={payments.length}
           icon={ReceiptText}
-          hint="Last 90 days"
+          hint="All recorded"
         />
         <StatCard
           label="Line Items"
@@ -1051,13 +1105,13 @@ function TransactionDetailReport() {
           label="Paid by Card"
           value={`${cardPct}%`}
           icon={CreditCard}
-          hint={`${cardCount} transactions`}
+          hint={`${cardCount} transaction${cardCount === 1 ? "" : "s"}`}
         />
         <StatCard
           label="Paid in Cash"
           value={`${cashPct}%`}
           icon={Banknote}
-          hint={`${cashCount} transactions`}
+          hint={`${cashCount} transaction${cashCount === 1 ? "" : "s"}`}
         />
       </div>
 
@@ -1131,6 +1185,9 @@ function TransactionDetailReport() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {lines.length === 0 && (
+              <EmptyRow colSpan={6}>No transactions recorded yet.</EmptyRow>
+            )}
             {lines.map((l) => (
               <TableRow key={l.key}>
                 <TableCell className="whitespace-nowrap text-muted-warm">
@@ -1140,7 +1197,7 @@ function TransactionDetailReport() {
                   {l.txn}
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
-                  {clientName(l.clientId)}
+                  {l.clientId ? clientName(l.clientId) : "Walk-in"}
                 </TableCell>
                 <TableCell
                   className={cn(
@@ -1179,11 +1236,13 @@ const mvcChartConfig = {
 } satisfies ChartConfig;
 
 function MostValuableClientsReport() {
+  const { clients } = useData();
+
   const top = [...clients]
     .sort((a, b) => b.totalSpent - a.totalSpent)
     .slice(0, 10);
   const combined = top.reduce((s, c) => s + c.totalSpent, 0);
-  const avgSpend = combined / top.length;
+  const avgSpend = top.length ? combined / top.length : 0;
   const visits = top.reduce((s, c) => s + c.visitCount, 0);
   const first = top[0];
 
@@ -1231,41 +1290,47 @@ function MostValuableClientsReport() {
         hint="All-time client revenue"
         className="mt-6"
       >
-        <ChartContainer config={mvcChartConfig} className="h-80 w-full">
-          <BarChart
-            data={chartData}
-            layout="vertical"
-            margin={{ left: 8, right: 16, top: 8 }}
-          >
-            <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-            <XAxis
-              type="number"
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
-            />
-            <YAxis
-              type="category"
-              dataKey="name"
-              tickLine={false}
-              axisLine={false}
-              width={86}
-            />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  formatter={(value) => formatCurrency(Number(value))}
-                />
-              }
-            />
-            <Bar isAnimationActive={false}
-              dataKey="spend"
-              fill="var(--color-gold)"
-              radius={[0, 6, 6, 0]}
-              maxBarSize={20}
-            />
-          </BarChart>
-        </ChartContainer>
+        {chartData.length === 0 ? (
+          <EmptyNote>No clients on the books yet.</EmptyNote>
+        ) : (
+          <ChartContainer config={mvcChartConfig} className="h-80 w-full">
+            <BarChart
+              data={chartData}
+              layout="vertical"
+              margin={{ left: 8, right: 16, top: 8 }}
+            >
+              <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+              <XAxis
+                type="number"
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v: number) =>
+                  v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`
+                }
+              />
+              <YAxis
+                type="category"
+                dataKey="name"
+                tickLine={false}
+                axisLine={false}
+                width={86}
+              />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    formatter={(value) => formatCurrency(Number(value))}
+                  />
+                }
+              />
+              <Bar isAnimationActive={false}
+                dataKey="spend"
+                fill="var(--color-gold)"
+                radius={[0, 6, 6, 0]}
+                maxBarSize={20}
+              />
+            </BarChart>
+          </ChartContainer>
+        )}
       </SectionCard>
 
       <SectionCard
@@ -1285,6 +1350,9 @@ function MostValuableClientsReport() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {top.length === 0 && (
+              <EmptyRow colSpan={5}>No clients on the books yet.</EmptyRow>
+            )}
             {top.map((c, i) => (
               <TableRow key={c.id}>
                 <TableCell className="text-muted-warm">{i + 1}</TableCell>
@@ -1333,6 +1401,8 @@ function MostValuableClientsReport() {
 /* ------------------------------------------------------------------ */
 
 function ExpensesReport() {
+  const { expenses } = useData();
+
   const total = round2(expenses.reduce((s, e) => s + e.amount, 0));
 
   const perCategory = new Map<string, number>();
@@ -1374,7 +1444,7 @@ function ExpensesReport() {
           label="Total Expenses"
           value={formatCurrency(total)}
           icon={Receipt}
-          hint="Last 60 days · both locations"
+          hint="All recorded · both locations"
         />
         <StatCard
           label="Top Category"
@@ -1390,7 +1460,7 @@ function ExpensesReport() {
           label="Recurring Monthly"
           value={formatCurrency(recurringMonthly)}
           icon={Repeat}
-          hint="Rent, payroll, utilities & subscriptions"
+          hint="Recurring expenses · last 31 days"
         />
       </div>
 
@@ -1400,50 +1470,54 @@ function ExpensesReport() {
           hint="Share of total expenses"
           className="lg:col-span-2"
         >
-          <ChartContainer
-            config={expenseChartConfig}
-            className="mx-auto h-72 w-full max-w-xs"
-          >
-            <PieChart>
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    hideLabel
-                    formatter={(value, name) => (
-                      <div className="flex w-full items-center justify-between gap-4">
-                        <span className="text-muted-foreground">
-                          {String(name)}
-                        </span>
-                        <span className="font-mono font-medium tabular-nums">
-                          {formatCurrency(Number(value))}
-                        </span>
-                      </div>
-                    )}
-                  />
-                }
-              />
-              <Pie isAnimationActive={false}
-                data={byCategory}
-                dataKey="amount"
-                nameKey="category"
-                innerRadius={55}
-                outerRadius={90}
-                paddingAngle={2}
-                strokeWidth={2}
-              >
-                {byCategory.map((c, i) => (
-                  <Cell
-                    key={c.category}
-                    fill={goldPalette[i % goldPalette.length]}
-                  />
-                ))}
-              </Pie>
-              <ChartLegend
-                content={<ChartLegendContent nameKey="category" />}
-                className="flex-wrap"
-              />
-            </PieChart>
-          </ChartContainer>
+          {byCategory.length === 0 ? (
+            <EmptyNote>No expenses recorded yet.</EmptyNote>
+          ) : (
+            <ChartContainer
+              config={expenseChartConfig}
+              className="mx-auto h-72 w-full max-w-xs"
+            >
+              <PieChart>
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      hideLabel
+                      formatter={(value, name) => (
+                        <div className="flex w-full items-center justify-between gap-4">
+                          <span className="text-muted-foreground">
+                            {String(name)}
+                          </span>
+                          <span className="font-mono font-medium tabular-nums">
+                            {formatCurrency(Number(value))}
+                          </span>
+                        </div>
+                      )}
+                    />
+                  }
+                />
+                <Pie isAnimationActive={false}
+                  data={byCategory}
+                  dataKey="amount"
+                  nameKey="category"
+                  innerRadius={55}
+                  outerRadius={90}
+                  paddingAngle={2}
+                  strokeWidth={2}
+                >
+                  {byCategory.map((c, i) => (
+                    <Cell
+                      key={c.category}
+                      fill={goldPalette[i % goldPalette.length]}
+                    />
+                  ))}
+                </Pie>
+                <ChartLegend
+                  content={<ChartLegendContent nameKey="category" />}
+                  className="flex-wrap"
+                />
+              </PieChart>
+            </ChartContainer>
+          )}
         </SectionCard>
 
         <SectionCard
@@ -1462,6 +1536,9 @@ function ExpensesReport() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {byCategory.length === 0 && (
+                <EmptyRow colSpan={4}>No expenses recorded yet.</EmptyRow>
+              )}
               {byCategory.map((c, i) => (
                 <TableRow key={c.category}>
                   <TableCell>
@@ -1483,7 +1560,7 @@ function ExpensesReport() {
                     {formatCurrency(c.amount, { cents: true })}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-ink-soft">
-                    {((c.amount / total) * 100).toFixed(1)}%
+                    {total > 0 ? ((c.amount / total) * 100).toFixed(1) : "0.0"}%
                   </TableCell>
                 </TableRow>
               ))}
@@ -1505,12 +1582,20 @@ const commissionChartConfig = {
 } satisfies ChartConfig;
 
 function CommissionEarningsReport() {
+  const { staff, appointments } = useData();
+
+  const now = new Date();
+  const weekStartsAt = startOfWeek(now, { weekStartsOn: 1 });
+  const weekEndsAt = endOfWeek(now, { weekStartsOn: 1 });
+
   const rows = staff.map((s) => {
-    const done = appointments.filter(
-      (a) => a.staffId === s.id && a.status === "completed"
-    );
+    const done = appointments.filter((a) => {
+      if (a.staffId !== s.id || a.status !== "completed") return false;
+      const d = new Date(a.startISO);
+      return d >= weekStartsAt && d <= weekEndsAt;
+    });
     const revenue = done.reduce((sum, a) => sum + a.price, 0);
-    const rate = s.id === "staff-carolina" ? 0 : 0.4;
+    const rate = s.role.toLowerCase().includes("owner") ? 0 : 0.4;
     return {
       id: s.id,
       name: s.name,
@@ -1521,13 +1606,11 @@ function CommissionEarningsReport() {
       commission: round2(revenue * rate),
     };
   });
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  const marisol = byId.get("staff-marisol");
-  const jenny = byId.get("staff-jenny");
-  const totalCommission = round2(rows.reduce((s, r) => s + r.commission, 0));
-  const commissionableRevenue = rows
+  const ranked = rows
     .filter((r) => r.rate > 0)
-    .reduce((s, r) => s + r.revenue, 0);
+    .sort((a, b) => b.commission - a.commission);
+  const totalCommission = round2(rows.reduce((s, r) => s + r.commission, 0));
+  const commissionableRevenue = ranked.reduce((s, r) => s + r.revenue, 0);
 
   const chartData = rows.map((r) => ({
     name: r.name.split(" ")[0],
@@ -1544,18 +1627,15 @@ function CommissionEarningsReport() {
           icon={HandCoins}
           hint="Completed services this week"
         />
-        <StatCard
-          label="Marisol Vega"
-          value={formatCurrency(marisol?.commission ?? 0)}
-          icon={Percent}
-          hint={`${marisol?.services ?? 0} services · 40% rate`}
-        />
-        <StatCard
-          label="Jenny Park"
-          value={formatCurrency(jenny?.commission ?? 0)}
-          icon={Percent}
-          hint={`${jenny?.services ?? 0} services · 40% rate`}
-        />
+        {ranked.slice(0, 2).map((r) => (
+          <StatCard
+            key={r.id}
+            label={r.name}
+            value={formatCurrency(r.commission)}
+            icon={Percent}
+            hint={`${r.services} service${r.services === 1 ? "" : "s"} · 40% rate`}
+          />
+        ))}
         <StatCard
           label="Commissionable Revenue"
           value={formatCurrency(commissionableRevenue)}
@@ -1569,57 +1649,61 @@ function CommissionEarningsReport() {
         hint="Completed service revenue vs. commission"
         className="mt-6"
       >
-        <ChartContainer
-          config={commissionChartConfig}
-          className="h-64 w-full"
-        >
-          <BarChart data={chartData} margin={{ left: 4, right: 12, top: 8 }}>
-            <CartesianGrid vertical={false} strokeDasharray="3 3" />
-            <XAxis
-              dataKey="name"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-            />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              width={48}
-              tickFormatter={(v: number) => `$${v}`}
-            />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  formatter={(value, name) => (
-                    <div className="flex w-full items-center justify-between gap-4">
-                      <span className="text-muted-foreground">
-                        {commissionChartConfig[
-                          name as keyof typeof commissionChartConfig
-                        ]?.label ?? name}
-                      </span>
-                      <span className="font-mono font-medium tabular-nums">
-                        {formatCurrency(Number(value), { cents: true })}
-                      </span>
-                    </div>
-                  )}
-                />
-              }
-            />
-            <ChartLegend content={<ChartLegendContent />} />
-            <Bar isAnimationActive={false}
-              dataKey="revenue"
-              fill="var(--color-revenue)"
-              radius={[6, 6, 0, 0]}
-              maxBarSize={36}
-            />
-            <Bar isAnimationActive={false}
-              dataKey="commission"
-              fill="var(--color-commission)"
-              radius={[6, 6, 0, 0]}
-              maxBarSize={36}
-            />
-          </BarChart>
-        </ChartContainer>
+        {chartData.length === 0 ? (
+          <EmptyNote>No bookable staff yet.</EmptyNote>
+        ) : (
+          <ChartContainer
+            config={commissionChartConfig}
+            className="h-64 w-full"
+          >
+            <BarChart data={chartData} margin={{ left: 4, right: 12, top: 8 }}>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" />
+              <XAxis
+                dataKey="name"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                width={48}
+                tickFormatter={(v: number) => `$${v}`}
+              />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    formatter={(value, name) => (
+                      <div className="flex w-full items-center justify-between gap-4">
+                        <span className="text-muted-foreground">
+                          {commissionChartConfig[
+                            name as keyof typeof commissionChartConfig
+                          ]?.label ?? name}
+                        </span>
+                        <span className="font-mono font-medium tabular-nums">
+                          {formatCurrency(Number(value), { cents: true })}
+                        </span>
+                      </div>
+                    )}
+                  />
+                }
+              />
+              <ChartLegend content={<ChartLegendContent />} />
+              <Bar isAnimationActive={false}
+                dataKey="revenue"
+                fill="var(--color-revenue)"
+                radius={[6, 6, 0, 0]}
+                maxBarSize={36}
+              />
+              <Bar isAnimationActive={false}
+                dataKey="commission"
+                fill="var(--color-commission)"
+                radius={[6, 6, 0, 0]}
+                maxBarSize={36}
+              />
+            </BarChart>
+          </ChartContainer>
+        )}
       </SectionCard>
 
       <SectionCard
@@ -1639,6 +1723,9 @@ function CommissionEarningsReport() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {rows.length === 0 && (
+              <EmptyRow colSpan={5}>No bookable staff yet.</EmptyRow>
+            )}
             {rows.map((r) => (
               <TableRow key={r.id}>
                 <TableCell>
@@ -1665,7 +1752,7 @@ function CommissionEarningsReport() {
         </Table>
         <p className="mt-4 text-xs font-light text-muted-warm">
           Commission is modeled at 40% of completed service revenue for
-          estheticians. Carolina is compensated via owner draw — no commission
+          estheticians. Owners are compensated via draw — no commission
           applies.
         </p>
       </SectionCard>
@@ -1681,34 +1768,15 @@ const timesheetChartConfig = {
   hours: { label: "Hours", color: "var(--color-gold)" },
 } satisfies ChartConfig;
 
-const shiftFor = (day: number) =>
-  day === 5
-    ? { clockIn: "8:45 AM", clockOut: "3:15 PM", hours: 6.5 }
-    : { clockIn: "8:45 AM", clockOut: "5:15 PM", hours: 8.5 };
-
-// Deterministic weekly schedule: day index 0 = Monday.
-const timesheetSchedule = [
-  { staffId: "staff-carolina", days: [0, 1, 2, 3, 4, 5] },
-  { staffId: "staff-marisol", days: [1, 2, 3, 4, 5] },
-  { staffId: "staff-jenny", days: [0, 1, 2, 3, 4, 5] },
-];
-
 function TimesheetsReport() {
-  const entries = timesheetSchedule.flatMap(({ staffId, days }) => {
-    const member = staffById.get(staffId);
-    return days.map((day) => ({
-      key: `${staffId}-${day}`,
-      staffName: member?.name ?? "",
-      date: addDays(weekStart, day),
-      ...shiftFor(day),
-    }));
-  });
+  const { staff } = useData();
 
-  const perStaff = timesheetSchedule.map(({ staffId, days }) => ({
-    id: staffId,
-    name: staffById.get(staffId)?.name ?? "",
-    hours: round2(days.reduce((sum, d) => sum + shiftFor(d).hours, 0)),
-  }));
+  const weekStartsAt = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const weekEndsAt = addDays(weekStartsAt, 5); // Mon – Sat
+
+  // No time-clock source is connected yet, so logged hours are zero until
+  // clock-ins start landing in the database.
+  const perStaff = staff.map((s) => ({ id: s.id, name: s.name, hours: 0 }));
   const totalHours = round2(perStaff.reduce((s, p) => s + p.hours, 0));
 
   const chartData = perStaff.map((p) => ({
@@ -1723,9 +1791,9 @@ function TimesheetsReport() {
           label="Total Hours"
           value={totalHours}
           icon={Clock}
-          hint="Mon – Sat · this week"
+          hint={`${format(weekStartsAt, "MMM d")} – ${format(weekEndsAt, "MMM d")} · this week`}
         />
-        {perStaff.map((p) => (
+        {perStaff.slice(0, 3).map((p) => (
           <StatCard
             key={p.id}
             label={p.name}
@@ -1741,36 +1809,41 @@ function TimesheetsReport() {
         hint="Clocked hours · this week"
         className="mt-6"
       >
-        <ChartContainer config={timesheetChartConfig} className="h-64 w-full">
-          <BarChart data={chartData} margin={{ left: 4, right: 12, top: 8 }}>
-            <CartesianGrid vertical={false} strokeDasharray="3 3" />
-            <XAxis
-              dataKey="name"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-            />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              width={32}
-              tickFormatter={(v: number) => `${v}h`}
-            />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  formatter={(value) => `${Number(value)} hours`}
-                />
-              }
-            />
-            <Bar isAnimationActive={false}
-              dataKey="hours"
-              fill="var(--color-gold)"
-              radius={[6, 6, 0, 0]}
-              maxBarSize={44}
-            />
-          </BarChart>
-        </ChartContainer>
+        {chartData.length === 0 ? (
+          <EmptyNote>No bookable staff yet.</EmptyNote>
+        ) : (
+          <ChartContainer config={timesheetChartConfig} className="h-64 w-full">
+            <BarChart data={chartData} margin={{ left: 4, right: 12, top: 8 }}>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" />
+              <XAxis
+                dataKey="name"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                width={32}
+                allowDecimals={false}
+                tickFormatter={(v: number) => `${v}h`}
+              />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    formatter={(value) => `${Number(value)} hours`}
+                  />
+                }
+              />
+              <Bar isAnimationActive={false}
+                dataKey="hours"
+                fill="var(--color-gold)"
+                radius={[6, 6, 0, 0]}
+                maxBarSize={44}
+              />
+            </BarChart>
+          </ChartContainer>
+        )}
       </SectionCard>
 
       <SectionCard
@@ -1790,21 +1863,10 @@ function TimesheetsReport() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {entries.map((e) => (
-              <TableRow key={e.key}>
-                <TableCell className="whitespace-nowrap">
-                  {e.staffName}
-                </TableCell>
-                <TableCell className="whitespace-nowrap text-muted-warm">
-                  {format(e.date, "EEE, MMM d")}
-                </TableCell>
-                <TableCell className="font-light">{e.clockIn}</TableCell>
-                <TableCell className="font-light">{e.clockOut}</TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {e.hours.toFixed(1)}
-                </TableCell>
-              </TableRow>
-            ))}
+            <EmptyRow colSpan={5}>
+              No clock-ins recorded for the week of{" "}
+              {format(weekStartsAt, "MMMM d")} yet.
+            </EmptyRow>
           </TableBody>
         </Table>
       </SectionCard>

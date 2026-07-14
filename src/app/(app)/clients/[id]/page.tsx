@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { clientById, formatCurrency } from "@/data";
+import { formatCurrency, useData } from "@/data";
 import { StatCard } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,6 +51,7 @@ export default function ClientDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = React.use(params);
+  const { clientById } = useData();
   const client = clientById.get(id);
 
   if (!client) {

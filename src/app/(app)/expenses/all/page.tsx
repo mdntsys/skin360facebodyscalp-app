@@ -2,12 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { format } from "date-fns";
+import { format, isSameMonth, subDays } from "date-fns";
 import { ArrowLeft, ArrowUpDown, Paperclip, Plus } from "lucide-react";
 
 import {
-  expenses as seedExpenses,
   formatCurrency,
+  useData,
   type Expense,
   type ExpenseCategory,
 } from "@/data";
@@ -33,16 +33,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import {
-  CATEGORY_TINTS,
-  EXPENSE_CATEGORIES,
-  getAdded,
-  inRange,
-  type RangeKey,
-} from "../_store";
 
 type SortKey = "date" | "amount";
 type SortDir = "asc" | "desc";
+
+type RangeKey = "month" | "30" | "90" | "all";
 
 const RANGE_OPTIONS: { value: RangeKey; label: string }[] = [
   { value: "month", label: "This month" },
@@ -50,6 +45,41 @@ const RANGE_OPTIONS: { value: RangeKey; label: string }[] = [
   { value: "90", label: "Last 90 days" },
   { value: "all", label: "All time" },
 ];
+
+const EXPENSE_CATEGORIES: ExpenseCategory[] = [
+  "Inventory",
+  "Rent",
+  "Utilities",
+  "Supplies",
+  "Payroll",
+  "Marketing",
+  "Other",
+];
+
+/** Subtle gold/cream badge tints per category — deliberately not rainbow. */
+const CATEGORY_TINTS: Record<ExpenseCategory, string> = {
+  Inventory: "bg-gold-50 text-gold-700 border-gold-200",
+  Rent: "bg-gold-100 text-gold-800 border-gold-200",
+  Utilities: "bg-cream text-ink-soft border-line",
+  Supplies: "bg-sand/70 text-ink-soft border-line",
+  Payroll: "bg-gold-200/40 text-gold-800 border-gold-200",
+  Marketing: "bg-gold-50 text-gold-600 border-gold-100",
+  Other: "bg-white text-muted-warm border-line",
+};
+
+function inRange(dateISO: string, range: RangeKey, now: Date): boolean {
+  const d = new Date(dateISO);
+  switch (range) {
+    case "month":
+      return isSameMonth(d, now);
+    case "30":
+      return d >= subDays(now, 30);
+    case "90":
+      return d >= subDays(now, 90);
+    case "all":
+      return true;
+  }
+}
 
 function CategoryBadge({ category }: { category: ExpenseCategory }) {
   return (
@@ -66,6 +96,7 @@ function CategoryBadge({ category }: { category: ExpenseCategory }) {
 }
 
 export default function AllExpensesPage() {
+  const { expenses } = useData();
   const [category, setCategory] = React.useState<ExpenseCategory | "all">(
     "all"
   );
@@ -73,16 +104,12 @@ export default function AllExpensesPage() {
   const [sortKey, setSortKey] = React.useState<SortKey>("date");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
 
-  const merged = React.useMemo(
-    () => [...getAdded(), ...seedExpenses],
-    []
-  );
-
   const filtered = React.useMemo(() => {
-    const rows = merged.filter(
+    const now = new Date();
+    const rows = expenses.filter(
       (e) =>
         (category === "all" || e.category === category) &&
-        inRange(e.dateISO, range)
+        inRange(e.dateISO, range, now)
     );
     return rows.sort((a, b) => {
       const cmp =
@@ -91,7 +118,7 @@ export default function AllExpensesPage() {
           : a.amount - b.amount;
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [merged, category, range, sortKey, sortDir]);
+  }, [expenses, category, range, sortKey, sortDir]);
 
   const total = filtered.reduce((sum, e) => sum + e.amount, 0);
 
@@ -242,7 +269,9 @@ export default function AllExpensesPage() {
                     colSpan={7}
                     className="py-10 text-center text-sm font-light text-muted-warm"
                   >
-                    No expenses match this filter.
+                    {expenses.length === 0
+                      ? "No expenses recorded yet."
+                      : "No expenses match this filter."}
                   </TableCell>
                 </TableRow>
               )}
@@ -308,7 +337,9 @@ export default function AllExpensesPage() {
       <div className="mt-5 space-y-3 md:hidden">
         {filtered.length === 0 && (
           <p className="py-10 text-center text-sm font-light text-muted-warm">
-            No expenses match this filter.
+            {expenses.length === 0
+              ? "No expenses recorded yet."
+              : "No expenses match this filter."}
           </p>
         )}
         {filtered.map((e: Expense) => (

@@ -3,13 +3,7 @@
 import { MapPin, Pencil, Phone, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  formatCurrency,
-  locations,
-  services,
-  staff,
-  type ServiceCategory,
-} from "@/data";
+import { formatCurrency, useData, type ServiceCategory } from "@/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -40,12 +34,12 @@ const SERVICE_CATEGORIES: ServiceCategory[] = [
   "Nails",
 ];
 
-const locationShortName = new Map(locations.map((l) => [l.id, l.shortName]));
-
 const tabTriggerClass =
   "rounded-full px-4 py-1.5 text-sm font-normal text-muted-warm data-active:text-ink data-active:shadow-xs";
 
 export default function SettingsPage() {
+  const { locations, allStaff, services, locationById } = useData();
+
   return (
     <>
       <PageHeader
@@ -132,7 +126,8 @@ export default function SettingsPage() {
                       {loc.name}
                     </CardTitle>
                     <p className="text-xs font-light text-muted-warm">
-                      {loc.address} · {loc.city}
+                      {[loc.address, loc.city].filter(Boolean).join(" · ") ||
+                        "Address not set yet"}
                     </p>
                   </div>
                 </CardHeader>
@@ -142,33 +137,43 @@ export default function SettingsPage() {
                       className="size-4 text-gold-600"
                       strokeWidth={1.75}
                     />
-                    {loc.phone}
+                    {loc.phone || (
+                      <span className="font-light text-muted-warm">
+                        Phone not set yet
+                      </span>
+                    )}
                   </p>
                   <div className="mt-4">
                     <p className="mb-2 text-xs font-normal tracking-[0.14em] text-muted-warm uppercase">
                       Hours
                     </p>
-                    <div className="divide-y divide-line/70 rounded-xl border border-line/70 bg-ivory/50 px-4">
-                      {loc.hours.map((h) => (
-                        <div
-                          key={h.days}
-                          className="flex items-center justify-between gap-4 py-2.5"
-                        >
-                          <span className="text-sm text-ink-soft">
-                            {h.days}
-                          </span>
-                          {h.open === "Closed" ? (
-                            <span className="text-sm font-light text-muted-warm">
-                              Closed
+                    {loc.hours.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-line bg-ivory/50 px-4 py-4 text-center text-sm font-light text-muted-warm">
+                        Hours not set yet
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-line/70 rounded-xl border border-line/70 bg-ivory/50 px-4">
+                        {loc.hours.map((h) => (
+                          <div
+                            key={h.days}
+                            className="flex items-center justify-between gap-4 py-2.5"
+                          >
+                            <span className="text-sm text-ink-soft">
+                              {h.days}
                             </span>
-                          ) : (
-                            <span className="text-sm text-ink tabular-nums">
-                              {h.open} – {h.close}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                            {h.open === "Closed" ? (
+                              <span className="text-sm font-light text-muted-warm">
+                                Closed
+                              </span>
+                            ) : (
+                              <span className="text-sm text-ink tabular-nums">
+                                {h.open} – {h.close}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -195,8 +200,13 @@ export default function SettingsPage() {
               </Button>
             </CardHeader>
             <CardContent>
+              {allStaff.length === 0 && (
+                <p className="py-8 text-center text-sm font-light text-muted-warm">
+                  No team members yet.
+                </p>
+              )}
               <div className="divide-y divide-line/70">
-                {staff.map((s) => (
+                {allStaff.map((s) => (
                   <div
                     key={s.id}
                     className="flex flex-wrap items-center gap-x-4 gap-y-2 py-4"
@@ -221,7 +231,7 @@ export default function SettingsPage() {
                             variant="outline"
                             className="rounded-full border-gold-200 bg-gold-50 px-2.5 py-0.5 text-[11px] font-normal text-gold-700"
                           >
-                            {locationShortName.get(id)}
+                            {locationById.get(id)?.shortName ?? id}
                           </Badge>
                         ))}
                       </div>
@@ -230,8 +240,9 @@ export default function SettingsPage() {
                       </p>
                     </div>
                     <div className="w-full text-xs font-light text-muted-warm sm:w-auto sm:text-right">
-                      <p>{s.email}</p>
-                      <p>{s.phone}</p>
+                      {s.email && <p>{s.email}</p>}
+                      {s.phone && <p>{s.phone}</p>}
+                      {!s.email && !s.phone && <p>—</p>}
                     </div>
                   </div>
                 ))}
@@ -244,6 +255,11 @@ export default function SettingsPage() {
         <TabsContent value="services" className="mt-4">
           <Card className="max-w-3xl border-line bg-white shadow-xs">
             <CardContent className="p-6 sm:p-8">
+              {services.length === 0 && (
+                <p className="py-8 text-center text-sm font-light text-muted-warm">
+                  No services on the menu yet.
+                </p>
+              )}
               <div className="space-y-8">
                 {SERVICE_CATEGORIES.map((cat) => {
                   const items = services.filter((s) => s.category === cat);

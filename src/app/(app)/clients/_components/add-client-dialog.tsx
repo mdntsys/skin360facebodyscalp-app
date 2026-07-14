@@ -1,12 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { formatISO } from "date-fns";
-import { UserPlus } from "lucide-react";
+import { Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
-  locations,
+  useData,
   type Client,
   type ClientTag,
   type LocationId,
@@ -38,11 +37,13 @@ const inputClass =
 const labelClass = "text-xs tracking-wide uppercase text-muted-warm";
 
 export function AddClientDialog({
-  onAdd,
+  onCreated,
 }: {
-  onAdd: (client: Client) => void;
+  onCreated?: (client: Client) => void;
 }) {
+  const { locations, createClient } = useData();
   const [open, setOpen] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -64,7 +65,7 @@ export function AddClientDialog({
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const first = firstName.trim();
     const last = lastName.trim();
@@ -72,28 +73,35 @@ export function AddClientDialog({
       toast.error("A first and last name are required");
       return;
     }
-    onAdd({
-      id: `cl-local-${Date.now()}`,
-      firstName: first,
-      lastName: last,
-      email: email.trim(),
-      phone: phone.trim(),
-      tags,
-      homeLocation,
-      joinedISO: formatISO(new Date(), { representation: "date" }),
-      lastVisitISO: null,
-      totalSpent: 0,
-      visitCount: 0,
-    });
-    toast.success(`${first} ${last} added to your client list`);
-    reset();
-    setOpen(false);
+    setSaving(true);
+    try {
+      const created = await createClient({
+        firstName: first,
+        lastName: last,
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
+        tags,
+        homeLocation,
+      });
+      toast.success(`${first} ${last} added to your client list`);
+      reset();
+      setOpen(false);
+      onCreated?.(created);
+    } catch (err) {
+      toast.error("Couldn't save the client", {
+        description:
+          err instanceof Error ? err.message : "Please try again in a moment.",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <Dialog
       open={open}
       onOpenChange={(o) => {
+        if (saving) return;
         setOpen(o);
         if (!o) reset();
       }}
@@ -212,11 +220,17 @@ export function AddClientDialog({
             <Button
               type="button"
               variant="ghost"
+              disabled={saving}
               onClick={() => setOpen(false)}
             >
               Cancel
             </Button>
-            <Button type="submit">Save Client</Button>
+            <Button type="submit" disabled={saving}>
+              {saving && (
+                <Loader2 data-icon="inline-start" className="animate-spin" />
+              )}
+              {saving ? "Saving…" : "Save Client"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -4,10 +4,10 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { ArrowLeft, FileText, Upload, X } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import type { Expense, ExpenseCategory } from "@/data";
+import { useData, type ExpenseCategory } from "@/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,46 +27,56 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { addExpense, EXPENSE_CATEGORIES } from "../_store";
+
+const EXPENSE_CATEGORIES: ExpenseCategory[] = [
+  "Inventory",
+  "Rent",
+  "Utilities",
+  "Supplies",
+  "Payroll",
+  "Marketing",
+  "Other",
+];
 
 export default function NewExpensePage() {
   const router = useRouter();
-  const fileRef = React.useRef<HTMLInputElement>(null);
+  const { addExpense } = useData();
 
   const [category, setCategory] = React.useState<ExpenseCategory | "">("");
   const [date, setDate] = React.useState(format(new Date(), "yyyy-MM-dd"));
   const [amount, setAmount] = React.useState("");
   const [vendor, setVendor] = React.useState("");
   const [description, setDescription] = React.useState("");
-  const [fileName, setFileName] = React.useState<string | null>(null);
   const [recurring, setRecurring] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
 
   const parsedAmount = Number.parseFloat(amount);
   const valid =
     category !== "" && date !== "" && !Number.isNaN(parsedAmount) && parsedAmount > 0;
 
-  function clearFile() {
-    setFileName(null);
-    if (fileRef.current) fileRef.current.value = "";
-  }
-
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!valid) return;
-    const expense: Expense = {
-      id: `exp-local-${Date.now()}`,
-      category,
-      dateISO: date,
-      amount: Math.round(parsedAmount * 100) / 100,
-      vendor: vendor.trim() || undefined,
-      description: description.trim() || undefined,
-      recurring,
-      locationId: "both",
-      receiptName: fileName ?? undefined,
-    };
-    addExpense(expense);
-    toast.success("Expense saved");
-    router.push("/expenses/all");
+    if (!valid || saving) return;
+    setSaving(true);
+    try {
+      await addExpense({
+        category,
+        dateISO: date,
+        amount: Math.round(parsedAmount * 100) / 100,
+        vendor: vendor.trim() || undefined,
+        description: description.trim() || undefined,
+        recurring,
+        locationId: "both",
+      });
+      toast.success("Expense saved");
+      router.push("/expenses/all");
+    } catch (err) {
+      toast.error("Couldn't save the expense", {
+        description:
+          err instanceof Error ? err.message : "Please try again in a moment.",
+      });
+      setSaving(false);
+    }
   }
 
   return (
@@ -197,59 +207,6 @@ export default function NewExpensePage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs tracking-wide uppercase text-muted-warm">
-                Receipt File
-              </Label>
-              {fileName ? (
-                <div className="flex items-center gap-3 rounded-2xl border border-line bg-ivory/50 px-4 py-3">
-                  <FileText
-                    className="size-4 shrink-0 text-gold-600"
-                    strokeWidth={1.75}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-sm text-ink">
-                    {fileName}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={clearFile}
-                    aria-label="Remove receipt"
-                    className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-warm transition-colors hover:bg-cream hover:text-ink"
-                  >
-                    <X className="size-4" strokeWidth={1.75} />
-                  </button>
-                </div>
-              ) : (
-                <label
-                  htmlFor="receipt"
-                  className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border border-dashed border-gold-300/70 bg-ivory/50 px-4 py-8 text-center transition-colors hover:border-gold-400 hover:bg-gold-50/40"
-                >
-                  <span className="flex size-10 items-center justify-center rounded-full bg-gold-50">
-                    <Upload
-                      className="size-[18px] text-gold-600"
-                      strokeWidth={1.75}
-                    />
-                  </span>
-                  <span className="text-sm text-ink-soft">
-                    Tap to attach a receipt
-                  </span>
-                  <span className="text-xs font-light text-muted-warm">
-                    PDF, JPG, or PNG
-                  </span>
-                </label>
-              )}
-              <input
-                ref={fileRef}
-                id="receipt"
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                className="hidden"
-                onChange={(e) =>
-                  setFileName(e.target.files?.[0]?.name ?? null)
-                }
-              />
-            </div>
-
             <div className="flex items-center justify-between gap-4 rounded-2xl border border-line bg-ivory/50 px-4 py-3.5">
               <div>
                 <p className="text-sm text-ink">Make Expense Recurring</p>
@@ -265,12 +222,16 @@ export default function NewExpensePage() {
             </div>
 
             <div className="flex items-center gap-3 pt-2">
-              <Button type="submit" disabled={!valid}>
-                Save Expense
+              <Button type="submit" disabled={!valid || saving}>
+                {saving && (
+                  <Loader2 data-icon="inline-start" className="animate-spin" />
+                )}
+                {saving ? "Saving…" : "Save Expense"}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
+                disabled={saving}
                 onClick={() => router.back()}
               >
                 Cancel

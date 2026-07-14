@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useData } from "@/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -121,6 +122,7 @@ const customMetrics = [
 type CustomMetric = (typeof customMetrics)[number];
 
 export default function ReportsPage() {
+  const { locations } = useData();
   const [builderOpen, setBuilderOpen] = React.useState(false);
   const [metrics, setMetrics] = React.useState<Record<CustomMetric, boolean>>({
     Revenue: true,
@@ -266,8 +268,11 @@ export default function ReportsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All locations</SelectItem>
-                      <SelectItem value="toluca">Toluca Lake</SelectItem>
-                      <SelectItem value="valencia">Valencia</SelectItem>
+                      {locations.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

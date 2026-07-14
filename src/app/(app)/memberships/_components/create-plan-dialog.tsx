@@ -42,8 +42,9 @@ export function CreatePlanDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (values: PlanFormValues) => void;
+  onSubmit: (values: PlanFormValues) => Promise<void>;
 }) {
+  const [submitting, setSubmitting] = React.useState(false);
   const [name, setName] = React.useState("");
   const [price, setPrice] = React.useState("");
   const [cycle, setCycle] = React.useState<"Monthly" | "Quarterly">("Monthly");
@@ -70,7 +71,7 @@ export function CreatePlanDialog({
     setPerks((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
       toast.error("Please enter a plan name.");
@@ -81,13 +82,24 @@ export function CreatePlanDialog({
       toast.error("Please enter a monthly price.");
       return;
     }
-    onSubmit({
-      name: name.trim(),
-      monthlyPrice,
-      billingCycle: cycle,
-      perks,
-    });
-    onOpenChange(false);
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        name: name.trim(),
+        monthlyPrice,
+        billingCycle: cycle,
+        perks,
+      });
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -213,11 +225,13 @@ export function CreatePlanDialog({
 
           <DialogFooter className="mt-2">
             <DialogClose asChild>
-              <Button type="button" variant="outline">
+              <Button type="button" variant="outline" disabled={submitting}>
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit">Create Membership</Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Creating…" : "Create Membership"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

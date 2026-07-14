@@ -3,14 +3,7 @@
 import { format } from "date-fns";
 import { Check, Crown, Gem } from "lucide-react";
 
-import {
-  clientPackages,
-  formatCurrency,
-  members,
-  packageById,
-  planById,
-  type Client,
-} from "@/data";
+import { formatCurrency, useData, type Client } from "@/data";
 import { StatusBadge } from "@/components/shared/status-badge";
 import {
   Card,
@@ -22,6 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { EmptyState } from "./empty-state";
 
 export function MembershipsTab({ client }: { client: Client }) {
+  const { clientPackages, members, packageById, planById } = useData();
   const membership = members.find((m) => m.clientId === client.id);
   const plan = membership ? planById.get(membership.planId) : undefined;
   const pkgs = clientPackages

@@ -5,11 +5,8 @@ import { format } from "date-fns";
 import { Check, LogIn, Pencil, Phone, X } from "lucide-react";
 
 import {
-  clientById,
   formatCurrency,
-  locationById,
-  serviceById,
-  staffById,
+  useData,
   type Appointment,
   type AppointmentStatus,
 } from "@/data";
@@ -48,6 +45,8 @@ export function AppointmentDrawer({
   onClose: () => void;
   onUpdateStatus: (id: string, status: AppointmentStatus) => void;
 }) {
+  const { clientById, serviceById, staffById, locationById } = useData();
+
   // Keep the last appointment rendered during the close animation.
   const lastRef = React.useRef<Appointment | null>(null);
   if (appointment) lastRef.current = appointment;

@@ -2,12 +2,7 @@
 
 import { addDays, format, isSameDay, isToday } from "date-fns";
 
-import {
-  clientById,
-  serviceById,
-  staffById,
-  type Appointment,
-} from "@/data";
+import { useData, type Appointment } from "@/data";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +15,8 @@ export function WeekView({
   appointments: Appointment[];
   onSelect: (a: Appointment) => void;
 }) {
+  const { clientById, serviceById, staffById } = useData();
+
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   return (

@@ -14,16 +14,10 @@ import {
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import {
-  appointments,
-  clientName,
   formatCurrency,
   matchesLocation,
-  products,
   revenueTrend,
-  serviceById,
-  staffById,
-  locationById,
-  clients,
+  useData,
 } from "@/data";
 import { useLocationFilter } from "@/components/shell/location-context";
 import { PageHeader } from "@/components/shared/page-header";
@@ -49,6 +43,18 @@ const chartConfig = {
 
 export default function DashboardPage() {
   const { location } = useLocationFilter();
+  const {
+    appointments,
+    clients,
+    payments,
+    products,
+    profile,
+    clientName,
+    serviceById,
+    staffById,
+    locationById,
+  } = useData();
+
   const now = new Date();
   const hour = now.getHours();
   const greeting =
@@ -79,15 +85,14 @@ export default function DashboardPage() {
 
   const lowStock = products.filter((p) => p.inStock <= p.lowStockThreshold);
   const newThisWeek = clients.filter(
-    (c) =>
-      (now.getTime() - new Date(c.joinedISO).getTime()) / 86400000 <= 7
+    (c) => (now.getTime() - new Date(c.joinedISO).getTime()) / 86400000 <= 7
   );
-  const trend = revenueTrend(14);
+  const trend = revenueTrend(visible, payments, 14);
 
   return (
     <>
       <PageHeader
-        title={`${greeting}, Carolina`}
+        title={`${greeting}, ${profile?.firstName ?? "there"}`}
         subtitle={format(now, "EEEE, MMMM d, yyyy")}
         actions={
           <Button asChild>
@@ -143,7 +148,7 @@ export default function DashboardPage() {
                 Revenue Trend
               </CardTitle>
               <p className="text-xs font-light text-muted-warm">
-                Last 14 days · all revenue types
+                Last 14 days · completed appointments & other sales
               </p>
             </div>
             <Button asChild variant="ghost" size="sm">
@@ -173,7 +178,9 @@ export default function DashboardPage() {
                   tickLine={false}
                   axisLine={false}
                   width={52}
-                  tickFormatter={(v: number) => `$${(v / 1000).toFixed(1)}k`}
+                  tickFormatter={(v: number) =>
+                    v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v}`
+                  }
                 />
                 <ChartTooltip
                   content={
@@ -209,7 +216,7 @@ export default function DashboardPage() {
           <CardContent className="space-y-1">
             {upcoming.length === 0 && (
               <p className="py-8 text-center text-sm font-light text-muted-warm">
-                Nothing else on the books this week.
+                Nothing on the books yet.
               </p>
             )}
             {upcoming.map((a) => {
@@ -266,6 +273,11 @@ export default function DashboardPage() {
             </Button>
           </CardHeader>
           <CardContent>
+            {lowStock.length === 0 && (
+              <p className="py-6 text-center text-sm font-light text-muted-warm">
+                Everything is stocked above its reorder threshold.
+              </p>
+            )}
             <div className="divide-y divide-line/70">
               {lowStock.map((p) => (
                 <div

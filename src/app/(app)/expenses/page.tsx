@@ -1,6 +1,5 @@
 "use client";
 
-import * as React from "react";
 import Link from "next/link";
 import { format, isSameMonth } from "date-fns";
 import {
@@ -11,10 +10,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { expenses, formatCurrency, type ExpenseCategory } from "@/data";
+import { formatCurrency, useData, type ExpenseCategory } from "@/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { getAdded } from "./_store";
 
 const actions: {
   href: string;
@@ -43,10 +41,12 @@ const actions: {
 ];
 
 export default function ExpensesPage() {
+  const { expenses } = useData();
   const now = new Date();
-  const merged = React.useMemo(() => [...getAdded(), ...expenses], []);
 
-  const thisMonth = merged.filter((e) => isSameMonth(new Date(e.dateISO), now));
+  const thisMonth = expenses.filter((e) =>
+    isSameMonth(new Date(e.dateISO), now)
+  );
   const monthTotal = thisMonth.reduce((sum, e) => sum + e.amount, 0);
 
   const byCategory = new Map<ExpenseCategory, number>();

@@ -3,7 +3,7 @@
 import { format } from "date-fns";
 import { CreditCard } from "lucide-react";
 
-import { formatCurrency, payments, type Client } from "@/data";
+import { formatCurrency, useData, type Client } from "@/data";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -23,6 +23,7 @@ const money = (n: number) =>
   n === 0 ? "—" : formatCurrency(n, { cents: true });
 
 export function PaymentsTab({ client }: { client: Client }) {
+  const { payments } = useData();
   const rows = payments
     .filter((p) => p.clientId === client.id)
     .sort(

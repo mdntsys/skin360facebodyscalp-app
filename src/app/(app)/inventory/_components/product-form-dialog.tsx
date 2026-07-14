@@ -79,8 +79,9 @@ export function ProductFormDialog({
   categories: string[];
   /** null = add mode; a product = edit mode (prefilled) */
   product: Product | null;
-  onSubmit: (values: ProductFormValues) => void;
+  onSubmit: (values: ProductFormValues) => Promise<void>;
 }) {
+  const [submitting, setSubmitting] = React.useState(false);
   const [name, setName] = React.useState("");
   const [category, setCategory] = React.useState("");
   const [sku, setSku] = React.useState("");
@@ -102,23 +103,34 @@ export function ProductFormDialog({
     setVendor(product?.vendor ?? "");
   }, [open, product]);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
       toast.error("Please enter a product name.");
       return;
     }
-    onSubmit({
-      name: name.trim(),
-      category: category || "Uncategorized",
-      sku: sku.trim() || "—",
-      inStock: Math.max(0, Math.round(Number(inStock) || 0)),
-      lowStockThreshold: Math.max(0, Math.round(Number(threshold) || 0)),
-      cost: Math.max(0, Number(cost) || 0),
-      retailPrice: Math.max(0, Number(retail) || 0),
-      vendor: vendor.trim() || "—",
-    });
-    onOpenChange(false);
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        name: name.trim(),
+        category: category || "Uncategorized",
+        sku: sku.trim() || "—",
+        inStock: Math.max(0, Math.round(Number(inStock) || 0)),
+        lowStockThreshold: Math.max(0, Math.round(Number(threshold) || 0)),
+        cost: Math.max(0, Number(cost) || 0),
+        retailPrice: Math.max(0, Number(retail) || 0),
+        vendor: vendor.trim() || "—",
+      });
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -162,6 +174,9 @@ export function ProductFormDialog({
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent position="popper">
+                  {categories.length === 0 && (
+                    <SelectItem value="Uncategorized">Uncategorized</SelectItem>
+                  )}
                   {categories.map((c) => (
                     <SelectItem key={c} value={c}>
                       {c}
@@ -247,12 +262,16 @@ export function ProductFormDialog({
 
           <DialogFooter className="mt-2">
             <DialogClose asChild>
-              <Button type="button" variant="outline">
+              <Button type="button" variant="outline" disabled={submitting}>
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit">
-              {product ? "Save Changes" : "Add Product"}
+            <Button type="submit" disabled={submitting}>
+              {submitting
+                ? "Saving…"
+                : product
+                  ? "Save Changes"
+                  : "Add Product"}
             </Button>
           </DialogFooter>
         </form>

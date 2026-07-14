@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, MapPin, Menu, Search, User } from "lucide-react";
 
+import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/brand/logo";
 import { navItems } from "./nav";
 import { useLocationFilter } from "./location-context";
@@ -33,13 +34,29 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import type { LocationFilter } from "@/data";
+import { useData, type LocationFilter } from "@/data";
 
 export function Topbar() {
   const { location, setLocation } = useLocationFilter();
+  const { profile } = useData();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = React.useState(false);
+
+  const displayName = profile
+    ? `${profile.firstName} ${profile.lastName}`.trim()
+    : "Signed in";
+  const initials = profile
+    ? `${profile.firstName[0] ?? ""}${profile.lastName[0] ?? ""}`.toUpperCase() ||
+      "S"
+    : "S";
+
+  async function handleSignOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b border-line bg-ivory/90 px-4 backdrop-blur-sm sm:px-6">
@@ -118,20 +135,23 @@ export function Topbar() {
         />
       </div>
 
-      {/* Staff menu */}
+      {/* User menu */}
       <DropdownMenu>
         <DropdownMenuTrigger className="ml-auto rounded-full outline-none focus-visible:ring-2 focus-visible:ring-gold-300 md:ml-0">
           <Avatar className="size-10 border border-gold-200">
             <AvatarFallback className="bg-gold-50 font-heading text-sm text-gold-700">
-              CA
+              {initials}
             </AvatarFallback>
           </Avatar>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>
-            <div className="font-normal">Carolina</div>
+            <div className="font-normal">{displayName}</div>
             <div className="text-xs font-light text-muted-warm">
-              Owner · Lead Esthetician
+              {profile?.role ?? ""}
+            </div>
+            <div className="text-xs font-light text-muted-warm">
+              {profile?.email ?? ""}
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
@@ -140,7 +160,7 @@ export function Topbar() {
               <User className="size-4" /> My profile
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => router.push("/login")}>
+          <DropdownMenuItem onClick={() => void handleSignOut()}>
             <LogOut className="size-4" /> Sign out
           </DropdownMenuItem>
         </DropdownMenuContent>

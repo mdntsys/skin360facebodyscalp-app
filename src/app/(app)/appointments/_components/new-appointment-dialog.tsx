@@ -3,13 +3,10 @@
 import * as React from "react";
 import { format, parse } from "date-fns";
 import { Sparkles } from "lucide-react";
+import { toast } from "sonner";
 
 import {
-  clients,
-  locations,
-  serviceById,
-  services,
-  staff,
+  useData,
   type Appointment,
   type LocationFilter,
   type LocationId,
@@ -42,11 +39,9 @@ const TRIGGER_CLASSES =
 
 const LABEL_CLASSES = "text-xs tracking-wide uppercase text-muted-warm";
 
-const SORTED_CLIENTS = [...clients].sort((a, b) =>
-  `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
-);
-
-function groupServices(): { category: ServiceCategory; items: Service[] }[] {
+function groupServices(
+  services: Service[]
+): { category: ServiceCategory; items: Service[] }[] {
   const groups: { category: ServiceCategory; items: Service[] }[] = [];
   for (const s of services) {
     const group = groups.find((g) => g.category === s.category);
@@ -55,7 +50,6 @@ function groupServices(): { category: ServiceCategory; items: Service[] }[] {
   }
   return groups;
 }
-const SERVICE_GROUPS = groupServices();
 
 // 30-minute slots from 8:00 AM through 6:30 PM
 const TIME_SLOTS: { value: string; label: string }[] = [];
@@ -80,6 +74,9 @@ export function NewAppointmentDialog({
   defaultLocation: LocationFilter;
   onCreate: (appt: Appointment) => void;
 }) {
+  const { clients, services, staff, locations, serviceById, createAppointment } =
+    useData();
+
   const [clientId, setClientId] = React.useState("");
   const [serviceId, setServiceId] = React.useState("");
   const [staffId, setStaffId] = React.useState("");
@@ -87,6 +84,7 @@ export function NewAppointmentDialog({
   const [date, setDate] = React.useState("");
   const [time, setTime] = React.useState("10:00");
   const [note, setNote] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
 
   // Fresh form each time the dialog opens.
   React.useEffect(() => {
@@ -98,8 +96,20 @@ export function NewAppointmentDialog({
       setDate(format(new Date(), "yyyy-MM-dd"));
       setTime("10:00");
       setNote("");
+      setSubmitting(false);
     }
   }, [open, defaultLocation]);
+
+  const sortedClients = React.useMemo(
+    () =>
+      [...clients].sort((a, b) =>
+        `${a.firstName} ${a.lastName}`.localeCompare(
+          `${b.firstName} ${b.lastName}`
+        )
+      ),
+    [clients]
+  );
+  const serviceGroups = React.useMemo(() => groupServices(services), [services]);
 
   const staffOptions = staff.filter((s) => s.locations.includes(locationId));
   const service = serviceById.get(serviceId);
@@ -112,23 +122,29 @@ export function NewAppointmentDialog({
     if (chosen && !chosen.locations.includes(next)) setStaffId("");
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!canSubmit || !service) return;
+    if (!canSubmit || !service || submitting) return;
     const start = parse(`${date} ${time}`, "yyyy-MM-dd HH:mm", new Date());
-    onCreate({
-      id: `apt-local-${Date.now()}`,
-      clientId,
-      serviceId,
-      staffId,
-      locationId,
-      startISO: start.toISOString(),
-      durationMin: service.durationMin,
-      price: service.price,
-      status: "confirmed",
-      note: note.trim() ? note.trim() : undefined,
-    });
-    onOpenChange(false);
+    setSubmitting(true);
+    try {
+      const created = await createAppointment({
+        clientId,
+        serviceId,
+        staffId,
+        locationId,
+        startISO: start.toISOString(),
+        durationMin: service.durationMin,
+        price: service.price,
+        note: note.trim() ? note.trim() : undefined,
+      });
+      onCreate(created);
+      onOpenChange(false);
+    } catch {
+      toast.error("Couldn't book the appointment. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -154,7 +170,7 @@ export function NewAppointmentDialog({
                 <SelectValue placeholder="Select a client" />
               </SelectTrigger>
               <SelectContent position="popper">
-                {SORTED_CLIENTS.map((c) => (
+                {sortedClients.map((c) => (
                   <SelectItem key={c.id} value={c.id} className="text-sm">
                     {c.firstName} {c.lastName}
                   </SelectItem>
@@ -172,7 +188,7 @@ export function NewAppointmentDialog({
                 <SelectValue placeholder="Select a service" />
               </SelectTrigger>
               <SelectContent position="popper">
-                {SERVICE_GROUPS.map((group) => (
+                {serviceGroups.map((group) => (
                   <SelectGroup key={group.category}>
                     <SelectLabel className="text-[11px] tracking-[0.14em] text-muted-warm uppercase">
                       {group.category}
@@ -293,9 +309,9 @@ export function NewAppointmentDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={!canSubmit}>
+            <Button type="submit" disabled={!canSubmit || submitting}>
               <Sparkles data-icon="inline-start" strokeWidth={1.75} />
-              Book Appointment
+              {submitting ? "Booking…" : "Book Appointment"}
             </Button>
           </div>
         </form>

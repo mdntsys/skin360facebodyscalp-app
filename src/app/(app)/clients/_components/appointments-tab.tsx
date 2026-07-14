@@ -3,14 +3,7 @@
 import { format } from "date-fns";
 import { CalendarDays } from "lucide-react";
 
-import {
-  appointments,
-  formatCurrency,
-  locationById,
-  serviceById,
-  staffById,
-  type Client,
-} from "@/data";
+import { formatCurrency, useData, type Client } from "@/data";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card } from "@/components/ui/card";
 import {
@@ -27,6 +20,7 @@ const headClass =
   "h-11 text-[11px] font-normal tracking-[0.14em] text-muted-warm uppercase";
 
 export function AppointmentsTab({ client }: { client: Client }) {
+  const { appointments, locationById, serviceById, staffById } = useData();
   const history = appointments
     .filter((a) => a.clientId === client.id)
     .sort(

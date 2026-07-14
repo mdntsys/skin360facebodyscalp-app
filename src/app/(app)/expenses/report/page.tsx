@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { format } from "date-fns";
+import { format, isSameMonth, startOfYear, subDays } from "date-fns";
 import {
   ArrowLeft,
   Crown,
@@ -12,11 +12,7 @@ import {
 } from "lucide-react";
 import { Bar, BarChart, Cell, XAxis, YAxis } from "recharts";
 
-import {
-  expenses as seedExpenses,
-  formatCurrency,
-  type ExpenseCategory,
-} from "@/data";
+import { formatCurrency, useData, type ExpenseCategory } from "@/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import {
@@ -46,7 +42,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getAdded, inRange, type RangeKey } from "../_store";
+
+type RangeKey = "month" | "30" | "90" | "ytd";
 
 const RANGE_OPTIONS: { value: RangeKey; label: string }[] = [
   { value: "month", label: "This month" },
@@ -54,6 +51,20 @@ const RANGE_OPTIONS: { value: RangeKey; label: string }[] = [
   { value: "90", label: "Last 90 days" },
   { value: "ytd", label: "Year to date" },
 ];
+
+function inRange(dateISO: string, range: RangeKey, now: Date): boolean {
+  const d = new Date(dateISO);
+  switch (range) {
+    case "month":
+      return isSameMonth(d, now);
+    case "30":
+      return d >= subDays(now, 30);
+    case "90":
+      return d >= subDays(now, 90);
+    case "ytd":
+      return d >= startOfYear(now);
+  }
+}
 
 const chartConfig = {
   total: { label: "Total", color: "var(--color-gold)" },
@@ -70,17 +81,13 @@ const BAR_PALETTE = [
 ];
 
 export default function ExpenseReportPage() {
+  const { expenses } = useData();
   const [range, setRange] = React.useState<RangeKey>("month");
 
-  const merged = React.useMemo(
-    () => [...getAdded(), ...seedExpenses],
-    []
-  );
-
-  const filtered = React.useMemo(
-    () => merged.filter((e) => inRange(e.dateISO, range)),
-    [merged, range]
-  );
+  const filtered = React.useMemo(() => {
+    const now = new Date();
+    return expenses.filter((e) => inRange(e.dateISO, range, now));
+  }, [expenses, range]);
 
   const grandTotal = filtered.reduce((sum, e) => sum + e.amount, 0);
 

@@ -1,11 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { format, formatISO } from "date-fns";
-import { NotebookPen, StickyNote } from "lucide-react";
+import { format } from "date-fns";
+import { Loader2, NotebookPen, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 
-import { clientNotes, staffById, type Client, type ClientNote } from "@/data";
+import { useData, type Client } from "@/data";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,30 +17,32 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "./empty-state";
 
 export function NotesTab({ client }: { client: Client }) {
-  const [notes, setNotes] = React.useState<ClientNote[]>(() =>
-    clientNotes
-      .filter((n) => n.clientId === client.id)
-      .sort(
-        (a, b) => new Date(b.dateISO).getTime() - new Date(a.dateISO).getTime()
-      )
-  );
+  const { clientNotes, staffById, addClientNote } = useData();
   const [draft, setDraft] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
 
-  const saveNote = () => {
+  const notes = clientNotes
+    .filter((n) => n.clientId === client.id)
+    .sort(
+      (a, b) => new Date(b.dateISO).getTime() - new Date(a.dateISO).getTime()
+    );
+
+  const saveNote = async () => {
     const text = draft.trim();
     if (!text) return;
-    setNotes((prev) => [
-      {
-        id: `note-local-${Date.now()}`,
-        clientId: client.id,
-        authorStaffId: "staff-carolina",
-        dateISO: formatISO(new Date(), { representation: "date" }),
-        text,
-      },
-      ...prev,
-    ]);
-    setDraft("");
-    toast.success("Note saved");
+    setSaving(true);
+    try {
+      await addClientNote(client.id, text);
+      setDraft("");
+      toast.success("Note saved");
+    } catch (err) {
+      toast.error("Couldn't save the note", {
+        description:
+          err instanceof Error ? err.message : "Please try again in a moment.",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -60,9 +62,13 @@ export function NotesTab({ client }: { client: Client }) {
             className="min-h-24 rounded-xl border-line bg-ivory/50 text-sm focus-visible:border-gold-300"
           />
           <div className="flex justify-end">
-            <Button onClick={saveNote} disabled={!draft.trim()}>
-              <NotebookPen data-icon="inline-start" strokeWidth={1.75} />
-              Save Note
+            <Button onClick={saveNote} disabled={saving || !draft.trim()}>
+              {saving ? (
+                <Loader2 data-icon="inline-start" className="animate-spin" />
+              ) : (
+                <NotebookPen data-icon="inline-start" strokeWidth={1.75} />
+              )}
+              {saving ? "Saving…" : "Save Note"}
             </Button>
           </div>
         </CardContent>

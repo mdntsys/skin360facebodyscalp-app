@@ -35,6 +35,7 @@ export interface StaffMember {
   locations: LocationId[];
   email: string;
   phone: string;
+  bookable: boolean; // admins are staff too, but can't take appointments
 }
 
 export type ClientTag =

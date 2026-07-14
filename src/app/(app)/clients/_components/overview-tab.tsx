@@ -12,13 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import {
-  appointments,
-  locationById,
-  serviceById,
-  staffById,
-  type Client,
-} from "@/data";
+import { useData, type Client } from "@/data";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,6 +22,7 @@ import {
 } from "@/components/ui/card";
 
 export function OverviewTab({ client }: { client: Client }) {
+  const { appointments, locationById, serviceById, staffById } = useData();
   const now = new Date();
   const upcoming = appointments
     .filter(

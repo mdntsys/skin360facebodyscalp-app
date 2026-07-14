@@ -2,8 +2,10 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Lock, Mail } from "lucide-react";
+import { Loader2, Lock, Mail } from "lucide-react";
+import { toast } from "sonner";
 
+import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +13,27 @@ import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = React.useState("carolina@skin360facebodyscalp.com");
-  const [password, setPassword] = React.useState("••••••••••");
+  const supabase = React.useMemo(() => createClient(), []);
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (error) {
+      toast.error("That email and password don't match. Please try again.");
+      setSubmitting(false);
+      return;
+    }
+    router.push("/dashboard");
+    router.refresh();
+  }
 
   return (
     <div className="relative flex min-h-svh items-center justify-center overflow-hidden bg-ivory px-4">
@@ -34,13 +55,7 @@ export default function LoginPage() {
             Sign in to your business suite
           </p>
 
-          <form
-            className="mt-8 space-y-5"
-            onSubmit={(e) => {
-              e.preventDefault();
-              router.push("/dashboard");
-            }}
-          >
+          <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
             <div className="space-y-2">
               <Label htmlFor="email" className="text-xs tracking-wide uppercase text-muted-warm">
                 Email
@@ -50,6 +65,8 @@ export default function LoginPage() {
                 <Input
                   id="email"
                   type="email"
+                  required
+                  autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-11 rounded-full border-line bg-ivory/50 pl-11 focus-visible:border-gold-300"
@@ -66,6 +83,8 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   type="password"
+                  required
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="h-11 rounded-full border-line bg-ivory/50 pl-11 focus-visible:border-gold-300"
@@ -73,17 +92,11 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end">
-              <button
-                type="button"
-                className="text-xs font-light text-gold-700 hover:underline"
-              >
-                Forgot password?
-              </button>
-            </div>
-
-            <Button type="submit" size="lg" className="w-full">
-              Sign In
+            <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+              {submitting && (
+                <Loader2 data-icon="inline-start" className="animate-spin" />
+              )}
+              {submitting ? "Signing in…" : "Sign In"}
             </Button>
           </form>
         </div>

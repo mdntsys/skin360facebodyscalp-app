@@ -4,7 +4,7 @@ import * as React from "react";
 import { MoveRight } from "lucide-react";
 import { toast } from "sonner";
 
-import { formatCurrency, serviceById, services } from "@/data";
+import { formatCurrency, useData } from "@/data";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -45,8 +45,10 @@ export function CreatePackageDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (values: PackageFormValues) => void;
+  onSubmit: (values: PackageFormValues) => Promise<void>;
 }) {
+  const { services, serviceById } = useData();
+  const [submitting, setSubmitting] = React.useState(false);
   const [name, setName] = React.useState("");
   const [serviceId, setServiceId] = React.useState("");
   const [sessions, setSessions] = React.useState("10");
@@ -66,7 +68,7 @@ export function CreatePackageDialog({
   const fullPrice = service ? sessionCount * service.price : 0;
   const salePrice = fullPrice * (1 - discountPct / 100);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
       toast.error("Please enter a package name.");
@@ -80,15 +82,26 @@ export function CreatePackageDialog({
       toast.error("Please enter at least one session.");
       return;
     }
-    onSubmit({
-      name: name.trim(),
-      serviceId: service.id,
-      sessions: sessionCount,
-      discountPct,
-      fullPrice,
-      price: Math.round(salePrice * 100) / 100,
-    });
-    onOpenChange(false);
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        name: name.trim(),
+        serviceId: service.id,
+        sessions: sessionCount,
+        discountPct,
+        fullPrice,
+        price: Math.round(salePrice * 100) / 100,
+      });
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -129,6 +142,11 @@ export function CreatePackageDialog({
                 <SelectValue placeholder="Choose a service" />
               </SelectTrigger>
               <SelectContent position="popper">
+                {services.length === 0 && (
+                  <div className="px-3 py-2 text-sm font-light text-muted-warm">
+                    No services yet.
+                  </div>
+                )}
                 {services.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.name} — {formatCurrency(s.price)}
@@ -193,11 +211,13 @@ export function CreatePackageDialog({
 
           <DialogFooter className="mt-2">
             <DialogClose asChild>
-              <Button type="button" variant="outline">
+              <Button type="button" variant="outline" disabled={submitting}>
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit">Create Package</Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Creating…" : "Create Package"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

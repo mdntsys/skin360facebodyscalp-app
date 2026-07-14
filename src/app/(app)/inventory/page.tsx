@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { formatCurrency, products, type Product } from "@/data";
+import { formatCurrency, useData, type Product } from "@/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -51,8 +51,8 @@ export default function InventoryPage() {
 
 function InventoryInner() {
   const searchParams = useSearchParams();
+  const { products, createProduct, updateProduct } = useData();
 
-  const [items, setItems] = React.useState<Product[]>(products);
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState("all");
   const [lowOnly, setLowOnly] = React.useState(
@@ -62,19 +62,19 @@ function InventoryInner() {
   const [editing, setEditing] = React.useState<Product | null>(null);
 
   const categories = React.useMemo(
-    () => Array.from(new Set(items.map((p) => p.category))).sort(),
-    [items]
+    () => Array.from(new Set(products.map((p) => p.category))).sort(),
+    [products]
   );
 
-  const lowStockCount = items.filter(
+  const lowStockCount = products.filter(
     (p) => p.inStock <= p.lowStockThreshold
   ).length;
-  const retailValue = items.reduce(
+  const retailValue = products.reduce(
     (sum, p) => sum + p.inStock * p.retailPrice,
     0
   );
 
-  const filtered = items.filter((p) => {
+  const filtered = products.filter((p) => {
     const q = query.trim().toLowerCase();
     const matchesQuery =
       !q ||
@@ -96,25 +96,28 @@ function InventoryInner() {
     setDialogOpen(true);
   }
 
-  function handleSubmit(values: ProductFormValues) {
+  async function handleSubmit(values: ProductFormValues) {
     if (editing) {
-      setItems((prev) =>
-        prev.map((p) => (p.id === editing.id ? { ...p, ...values } : p))
-      );
+      await updateProduct(editing.id, values);
       toast.success(`Saved changes to “${values.name}”.`);
     } else {
-      setItems((prev) => [{ id: `prod-local-${Date.now()}`, ...values }, ...prev]);
+      await createProduct(values);
       toast.success(`“${values.name}” added to inventory.`);
     }
   }
 
   const isLow = (p: Product) => p.inStock <= p.lowStockThreshold;
 
+  const emptyMessage =
+    products.length === 0
+      ? "No products yet — add your first retail product to start tracking stock."
+      : "No products match your filters.";
+
   return (
     <>
       <PageHeader
         title="Inventory"
-        subtitle={`${items.length} products · ${lowStockCount} low stock`}
+        subtitle={`${products.length} products · ${lowStockCount} low stock`}
         actions={
           <Button onClick={openAdd}>
             <Plus data-icon="inline-start" strokeWidth={1.75} />
@@ -126,7 +129,7 @@ function InventoryInner() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
           label="Total Products"
-          value={items.length}
+          value={products.length}
           icon={Package}
           hint={`${categories.length} categories`}
         />
@@ -227,7 +230,7 @@ function InventoryInner() {
                       colSpan={7}
                       className="px-4 py-10 text-center text-sm font-light text-muted-warm"
                     >
-                      No products match your filters.
+                      {emptyMessage}
                     </TableCell>
                   </TableRow>
                 )}
@@ -283,7 +286,7 @@ function InventoryInner() {
         {filtered.length === 0 && (
           <Card className="border-line bg-white shadow-xs">
             <CardContent className="py-10 text-center text-sm font-light text-muted-warm">
-              No products match your filters.
+              {emptyMessage}
             </CardContent>
           </Card>
         )}
