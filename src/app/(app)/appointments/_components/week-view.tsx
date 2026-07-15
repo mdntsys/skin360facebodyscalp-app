@@ -1,21 +1,29 @@
 "use client";
 
-import { addDays, format, isSameDay, isToday } from "date-fns";
+import { addDays, format, isSameDay, isToday, startOfDay } from "date-fns";
+import { CalendarOff } from "lucide-react";
 
-import { useData, type Appointment } from "@/data";
+import {
+  matchesLocation,
+  useData,
+  type Appointment,
+  type LocationFilter,
+} from "@/data";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export function WeekView({
   weekStart,
   appointments,
+  locationFilter,
   onSelect,
 }: {
   weekStart: Date;
   appointments: Appointment[];
+  locationFilter: LocationFilter;
   onSelect: (a: Appointment) => void;
 }) {
-  const { clientById, serviceById, staffById } = useData();
+  const { clientById, serviceById, staffById, timeBlocks } = useData();
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -27,6 +35,14 @@ export function WeekView({
             const dayAppts = appointments
               .filter((a) => isSameDay(new Date(a.startISO), day))
               .sort((a, b) => a.startISO.localeCompare(b.startISO));
+            const dayStart = startOfDay(day);
+            const dayEnd = addDays(dayStart, 1);
+            const dayBlocks = timeBlocks.filter(
+              (b) =>
+                matchesLocation(b.locationId, locationFilter) &&
+                new Date(b.startISO) < dayEnd &&
+                new Date(b.endISO) > dayStart
+            );
             const today = isToday(day);
 
             return (
@@ -61,7 +77,24 @@ export function WeekView({
                     today && "bg-gold-50/25"
                   )}
                 >
-                  {dayAppts.length === 0 && (
+                  {dayBlocks.length > 0 && (
+                    <span
+                      title={dayBlocks
+                        .map(
+                          (b) =>
+                            `${b.reason} (${format(
+                              new Date(b.startISO),
+                              "h:mma"
+                            )}–${format(new Date(b.endISO), "h:mma")})`
+                        )
+                        .join(" · ")}
+                      className="inline-flex items-center justify-center gap-1 self-center rounded-full border border-dashed border-stone-300 bg-stone-100/80 px-2 py-1 text-[10px] font-light text-stone-500"
+                    >
+                      <CalendarOff className="size-3" strokeWidth={1.75} />
+                      {dayBlocks.length} blocked
+                    </span>
+                  )}
+                  {dayAppts.length === 0 && dayBlocks.length === 0 && (
                     <p className="py-6 text-center text-[11px] font-light text-muted-warm/70">
                       —
                     </p>

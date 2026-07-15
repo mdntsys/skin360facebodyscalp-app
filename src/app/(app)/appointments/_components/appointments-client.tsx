@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { addDays, format, isSameDay, isSameWeek, startOfWeek } from "date-fns";
 import {
   CalendarDays,
+  CalendarOff,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -26,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { AppointmentDrawer } from "./appointment-drawer";
+import { BlockTimeDialog } from "./block-time-dialog";
 import { DayView } from "./day-view";
 import { ListView } from "./list-view";
 import { NewAppointmentDialog } from "./new-appointment-dialog";
@@ -49,6 +51,7 @@ export function AppointmentsClient() {
   const [selectedDate, setSelectedDate] = React.useState(() => new Date());
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [newOpen, setNewOpen] = React.useState(false);
+  const [blockOpen, setBlockOpen] = React.useState(false);
 
   // Open the booking dialog when arriving via /appointments?new=1
   React.useEffect(() => {
@@ -139,10 +142,16 @@ export function AppointmentsClient() {
         title="Appointments"
         subtitle="The schedule across Toluca Lake & Valencia"
         actions={
-          <Button onClick={() => setNewOpen(true)}>
-            <Plus data-icon="inline-start" strokeWidth={1.75} />
-            New Appointment
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => setBlockOpen(true)}>
+              <CalendarOff data-icon="inline-start" strokeWidth={1.75} />
+              Block Time
+            </Button>
+            <Button onClick={() => setNewOpen(true)}>
+              <Plus data-icon="inline-start" strokeWidth={1.75} />
+              New Appointment
+            </Button>
+          </div>
         }
       />
 
@@ -221,6 +230,7 @@ export function AppointmentsClient() {
           <WeekView
             weekStart={viewWeekStart}
             appointments={scoped}
+            locationFilter={location}
             onSelect={(a) => setSelectedId(a.id)}
           />
         )}
@@ -240,6 +250,12 @@ export function AppointmentsClient() {
         onOpenChange={handleNewOpenChange}
         defaultLocation={location}
         onCreate={handleCreated}
+      />
+
+      <BlockTimeDialog
+        open={blockOpen}
+        onOpenChange={setBlockOpen}
+        defaultLocation={location}
       />
     </>
   );

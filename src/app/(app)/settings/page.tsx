@@ -1,11 +1,10 @@
 "use client";
 
-import { MapPin, Pencil, Phone, UserPlus } from "lucide-react";
+import { MapPin, Pencil, Phone } from "lucide-react";
 import { toast } from "sonner";
 
-import { formatCurrency, useData, type ServiceCategory } from "@/data";
+import { useData, type ClinicLocation } from "@/data";
 import { PageHeader } from "@/components/shared/page-header";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +14,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+import { AccountCard } from "./_components/account-card";
+import { BookingPolicyCard } from "./_components/booking-policy-card";
+import { RoomsSection } from "./_components/rooms-section";
+import { ServicesSection } from "./_components/services-section";
+import { TeamSection } from "./_components/team-section";
 
 const BUSINESS_FIELDS: { label: string; value: string }[] = [
   { label: "Business name", value: "Skin 360 Face Body Scalp" },
@@ -26,25 +31,38 @@ const BUSINESS_FIELDS: { label: string; value: string }[] = [
   { label: "Timezone", value: "Pacific (Los Angeles)" },
 ];
 
-const SERVICE_CATEGORIES: ServiceCategory[] = [
-  "Facials",
-  "Advanced Treatments",
-  "Body",
-  "Scalp",
-  "Nails",
-];
-
 const tabTriggerClass =
   "rounded-full px-4 py-1.5 text-sm font-normal text-muted-warm data-active:text-ink data-active:shadow-xs";
 
+function BookingModeBadge({ mode }: { mode: ClinicLocation["bookingMode"] }) {
+  if (mode === "open") {
+    return (
+      <Badge
+        variant="outline"
+        className="rounded-full border-gold-200 bg-gold-50 px-2.5 py-0.5 text-[11px] font-normal text-gold-700"
+      >
+        Open — bookings live
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      variant="outline"
+      className="rounded-full border-line bg-cream px-2.5 py-0.5 text-[11px] font-normal text-muted-warm"
+    >
+      Call-only · booked by phone
+    </Badge>
+  );
+}
+
 export default function SettingsPage() {
-  const { locations, allStaff, services, locationById } = useData();
+  const { locations } = useData();
 
   return (
     <>
       <PageHeader
         title="Settings"
-        subtitle="Business profile, locations, team, and service menu"
+        subtitle="Business profile, locations, rooms, team, services, and booking policy"
       />
 
       <Tabs defaultValue="business">
@@ -56,11 +74,20 @@ export default function SettingsPage() {
             <TabsTrigger value="locations" className={tabTriggerClass}>
               Locations
             </TabsTrigger>
-            <TabsTrigger value="staff" className={tabTriggerClass}>
-              Staff
+            <TabsTrigger value="rooms" className={tabTriggerClass}>
+              Rooms
+            </TabsTrigger>
+            <TabsTrigger value="team" className={tabTriggerClass}>
+              Team
             </TabsTrigger>
             <TabsTrigger value="services" className={tabTriggerClass}>
               Services
+            </TabsTrigger>
+            <TabsTrigger value="booking" className={tabTriggerClass}>
+              Booking
+            </TabsTrigger>
+            <TabsTrigger value="account" className={tabTriggerClass}>
+              Account
             </TabsTrigger>
           </TabsList>
         </div>
@@ -121,10 +148,13 @@ export default function SettingsPage() {
                       strokeWidth={1.75}
                     />
                   </div>
-                  <div>
-                    <CardTitle className="font-heading text-xl font-medium">
-                      {loc.name}
-                    </CardTitle>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <CardTitle className="font-heading text-xl font-medium">
+                        {loc.name}
+                      </CardTitle>
+                      <BookingModeBadge mode={loc.bookingMode} />
+                    </div>
                     <p className="text-xs font-light text-muted-warm">
                       {[loc.address, loc.city].filter(Boolean).join(" · ") ||
                         "Address not set yet"}
@@ -181,119 +211,29 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
-        {/* ---------- Staff ---------- */}
-        <TabsContent value="staff" className="mt-4">
-          <Card className="max-w-3xl border-line bg-white shadow-xs">
-            <CardHeader className="flex-row items-center justify-between">
-              <CardTitle className="font-heading text-xl font-medium">
-                Team
-              </CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  toast("Staff invitations arrive with the full release")
-                }
-              >
-                <UserPlus data-icon="inline-start" strokeWidth={1.75} />
-                Invite staff
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {allStaff.length === 0 && (
-                <p className="py-8 text-center text-sm font-light text-muted-warm">
-                  No team members yet.
-                </p>
-              )}
-              <div className="divide-y divide-line/70">
-                {allStaff.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex flex-wrap items-center gap-x-4 gap-y-2 py-4"
-                  >
-                    <Avatar className="size-11">
-                      <AvatarFallback
-                        className="text-xs font-medium"
-                        style={{
-                          backgroundColor: `${s.color}1f`,
-                          color: s.color,
-                        }}
-                      >
-                        {s.initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm text-ink">{s.name}</p>
-                        {s.locations.map((id) => (
-                          <Badge
-                            key={id}
-                            variant="outline"
-                            className="rounded-full border-gold-200 bg-gold-50 px-2.5 py-0.5 text-[11px] font-normal text-gold-700"
-                          >
-                            {locationById.get(id)?.shortName ?? id}
-                          </Badge>
-                        ))}
-                      </div>
-                      <p className="text-xs font-light text-muted-warm">
-                        {s.role}
-                      </p>
-                    </div>
-                    <div className="w-full text-xs font-light text-muted-warm sm:w-auto sm:text-right">
-                      {s.email && <p>{s.email}</p>}
-                      {s.phone && <p>{s.phone}</p>}
-                      {!s.email && !s.phone && <p>—</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+        {/* ---------- Rooms ---------- */}
+        <TabsContent value="rooms" className="mt-4">
+          <RoomsSection />
+        </TabsContent>
+
+        {/* ---------- Team ---------- */}
+        <TabsContent value="team" className="mt-4">
+          <TeamSection />
         </TabsContent>
 
         {/* ---------- Services ---------- */}
         <TabsContent value="services" className="mt-4">
-          <Card className="max-w-3xl border-line bg-white shadow-xs">
-            <CardContent className="p-6 sm:p-8">
-              {services.length === 0 && (
-                <p className="py-8 text-center text-sm font-light text-muted-warm">
-                  No services on the menu yet.
-                </p>
-              )}
-              <div className="space-y-8">
-                {SERVICE_CATEGORIES.map((cat) => {
-                  const items = services.filter((s) => s.category === cat);
-                  if (items.length === 0) return null;
-                  return (
-                    <div key={cat}>
-                      <div className="mb-2 flex items-center gap-4">
-                        <h3 className="shrink-0 text-xl text-ink">{cat}</h3>
-                        <div className="h-px flex-1 bg-gold-200/70" />
-                      </div>
-                      <div className="divide-y divide-line/70">
-                        {items.map((svc) => (
-                          <div
-                            key={svc.id}
-                            className="flex items-baseline justify-between gap-4 py-3"
-                          >
-                            <div className="min-w-0">
-                              <p className="text-sm text-ink">{svc.name}</p>
-                              <p className="text-xs font-light text-muted-warm">
-                                {svc.durationMin} min
-                              </p>
-                            </div>
-                            <span className="shrink-0 font-heading text-lg text-ink tabular-nums">
-                              {formatCurrency(svc.price)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+          <ServicesSection />
+        </TabsContent>
+
+        {/* ---------- Booking policy ---------- */}
+        <TabsContent value="booking" className="mt-4">
+          <BookingPolicyCard />
+        </TabsContent>
+
+        {/* ---------- Account ---------- */}
+        <TabsContent value="account" className="mt-4">
+          <AccountCard />
         </TabsContent>
       </Tabs>
     </>

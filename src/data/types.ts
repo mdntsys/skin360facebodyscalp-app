@@ -1,5 +1,7 @@
 export type LocationId = "toluca" | "valencia";
 
+export type BookingMode = "open" | "call-only";
+
 export interface ClinicLocation {
   id: LocationId;
   name: string;
@@ -8,6 +10,7 @@ export interface ClinicLocation {
   city: string;
   phone: string;
   hours: { days: string; open: string; close: string }[];
+  bookingMode: BookingMode;
 }
 
 export type ServiceCategory =
@@ -23,8 +26,11 @@ export interface Service {
   category: ServiceCategory;
   price: number;
   durationMin: number;
+  bufferMin: number; // wind-down/cleanup minutes appended after the service
   description: string;
 }
+
+export type EmploymentType = "owner" | "admin" | "employee" | "contractor-1099";
 
 export interface StaffMember {
   id: string;
@@ -36,6 +42,8 @@ export interface StaffMember {
   email: string;
   phone: string;
   bookable: boolean; // admins are staff too, but can't take appointments
+  employmentType: EmploymentType;
+  serviceIds: string[]; // empty = performs all services
 }
 
 export type ClientTag =
@@ -80,6 +88,50 @@ export interface Appointment {
   price: number;
   status: AppointmentStatus;
   note?: string;
+  roomId?: string;
+}
+
+export interface Room {
+  id: string;
+  locationId: LocationId;
+  name: string;
+  capacity: number;
+  categories: ServiceCategory[];
+  sort: number;
+}
+
+export interface AvailabilityRule {
+  id: string;
+  staffId: string;
+  locationId: LocationId;
+  weekday: number; // 0 = Sunday .. 6 = Saturday (JS getDay convention)
+  startTime: string; // "HH:MM"
+  endTime: string; // "HH:MM"
+}
+
+export interface AvailabilityOverride {
+  id: string;
+  staffId: string;
+  dateISO: string; // "yyyy-MM-dd"
+  available: boolean;
+  startTime?: string; // "HH:MM"
+  endTime?: string; // "HH:MM"
+  note?: string;
+}
+
+export interface TimeBlock {
+  id: string;
+  locationId: LocationId;
+  staffId?: string; // set → blocks that staff member
+  roomId?: string; // set → blocks that room; neither → whole location
+  startISO: string;
+  endISO: string;
+  reason: string;
+}
+
+export interface AppSettings {
+  onlineBookingEnabled: boolean;
+  minNoticeHours: number;
 }
 
 export interface Product {

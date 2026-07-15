@@ -7,12 +7,16 @@ export { DataProvider, useData } from "./provider";
 export type {
   DataContextValue,
   NewAppointmentInput,
+  NewAvailabilityRule,
   NewClientInput,
   NewExpenseInput,
+  NewOverrideInput,
   NewPackageInput,
   NewPlanInput,
+  NewTimeBlockInput,
   Profile,
   ProductInput,
+  RoomInput,
 } from "./provider";
 
 export type LocationFilter = LocationId | "all";

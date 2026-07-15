@@ -6,6 +6,9 @@ import { parseISO } from "date-fns";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import {
   mapAppointment,
+  mapAppSettings,
+  mapAvailabilityOverride,
+  mapAvailabilityRule,
   mapClient,
   mapClientNote,
   mapClientPackage,
@@ -16,10 +19,15 @@ import {
   mapMembershipPlan,
   mapPayment,
   mapProduct,
+  mapRoom,
   mapService,
   mapServicePackage,
   mapStaff,
+  mapTimeBlock,
   type AppointmentRow,
+  type AppSettingsRow,
+  type AvailabilityOverrideRow,
+  type AvailabilityRuleRow,
   type ClientNoteRow,
   type ClientPackageRow,
   type ClientRow,
@@ -30,18 +38,24 @@ import {
   type MembershipPlanRow,
   type PaymentRow,
   type ProductRow,
+  type RoomRow,
   type ServicePackageRow,
   type ServiceRow,
   type StaffRow,
+  type TimeBlockRow,
 } from "./db";
 import type {
   Appointment,
   AppointmentStatus,
+  AppSettings,
+  AvailabilityOverride,
+  AvailabilityRule,
   Client,
   ClientNote,
   ClientPackage,
   ClientTag,
   ClinicLocation,
+  EmploymentType,
   Expense,
   ExpenseCategory,
   IntakeForm,
@@ -50,9 +64,12 @@ import type {
   MembershipPlan,
   Payment,
   Product,
+  Room,
   Service,
+  ServiceCategory,
   ServicePackage,
   StaffMember,
+  TimeBlock,
 } from "./types";
 
 export interface Profile {
@@ -72,6 +89,40 @@ export interface NewAppointmentInput {
   durationMin: number;
   price: number;
   note?: string;
+  roomId?: string | null;
+}
+
+export interface RoomInput {
+  locationId: LocationId;
+  name: string;
+  capacity: number;
+  categories: ServiceCategory[];
+  sort?: number;
+}
+
+export interface NewAvailabilityRule {
+  locationId: LocationId;
+  weekday: number;
+  startTime: string; // "HH:MM"
+  endTime: string; // "HH:MM"
+}
+
+export interface NewOverrideInput {
+  staffId: string;
+  dateISO: string; // "yyyy-MM-dd"
+  available: boolean;
+  startTime?: string;
+  endTime?: string;
+  note?: string;
+}
+
+export interface NewTimeBlockInput {
+  locationId: LocationId;
+  staffId?: string;
+  roomId?: string;
+  startISO: string;
+  endISO: string;
+  reason: string;
 }
 
 export interface NewClientInput {
@@ -139,6 +190,11 @@ interface Collections {
   payments: Payment[];
   intakeForms: IntakeForm[];
   clientNotes: ClientNote[];
+  rooms: Room[];
+  availabilityRules: AvailabilityRule[];
+  availabilityOverrides: AvailabilityOverride[];
+  timeBlocks: TimeBlock[];
+  appSettings: AppSettings;
 }
 
 export interface DataContextValue extends Collections {
@@ -153,6 +209,7 @@ export interface DataContextValue extends Collections {
   locationById: Map<string, ClinicLocation>;
   planById: Map<string, MembershipPlan>;
   packageById: Map<string, ServicePackage>;
+  roomById: Map<string, Room>;
   clientName: (c: Client | string | undefined) => string;
   refresh: () => Promise<void>;
   createAppointment: (input: NewAppointmentInput) => Promise<Appointment>;
@@ -168,7 +225,39 @@ export interface DataContextValue extends Collections {
   createMembershipPlan: (input: NewPlanInput) => Promise<MembershipPlan>;
   createServicePackage: (input: NewPackageInput) => Promise<ServicePackage>;
   addExpense: (input: NewExpenseInput) => Promise<Expense>;
+  createRoom: (input: RoomInput) => Promise<Room>;
+  updateRoom: (id: string, input: RoomInput) => Promise<void>;
+  deleteRoom: (id: string) => Promise<void>;
+  /** Replaces ALL weekly rules for the given staff member. */
+  saveAvailabilityRules: (
+    staffId: string,
+    rules: NewAvailabilityRule[]
+  ) => Promise<void>;
+  addAvailabilityOverride: (
+    input: NewOverrideInput
+  ) => Promise<AvailabilityOverride>;
+  deleteAvailabilityOverride: (id: string) => Promise<void>;
+  addTimeBlock: (input: NewTimeBlockInput) => Promise<TimeBlock>;
+  deleteTimeBlock: (id: string) => Promise<void>;
+  updateStaff: (
+    id: string,
+    input: {
+      serviceIds?: string[];
+      bookable?: boolean;
+      employmentType?: EmploymentType;
+    }
+  ) => Promise<void>;
+  updateService: (
+    id: string,
+    input: { bufferMin?: number; price?: number; durationMin?: number }
+  ) => Promise<void>;
+  updateAppSettings: (input: Partial<AppSettings>) => Promise<void>;
 }
+
+const DEFAULT_APP_SETTINGS: AppSettings = {
+  onlineBookingEnabled: false,
+  minNoticeHours: 72,
+};
 
 const EMPTY: Collections = {
   locations: [],
@@ -185,12 +274,21 @@ const EMPTY: Collections = {
   payments: [],
   intakeForms: [],
   clientNotes: [],
+  rooms: [],
+  availabilityRules: [],
+  availabilityOverrides: [],
+  timeBlocks: [],
+  appSettings: DEFAULT_APP_SETTINGS,
 };
 
 const DataContext = React.createContext<DataContextValue | null>(null);
 
 function byStart(a: Appointment, b: Appointment) {
   return new Date(a.startISO).getTime() - new Date(b.startISO).getTime();
+}
+
+function bySort(a: Room, b: Room) {
+  return a.sort - b.sort;
 }
 
 /** Date-only strings ("2026-07-14") are interpreted in local time. */
@@ -211,7 +309,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setStatus("loading");
     setErrorMessage(null);
     try {
-      const [loc, svc, stf, cli, appt, prod, plan, mem, pkg, cpkg, exp, pay, forms, notes] =
+      const [loc, svc, stf, cli, appt, prod, plan, mem, pkg, cpkg, exp, pay, forms, notes, rms, rules, ovr, blocks, settings] =
         await Promise.all([
           supabase.from("locations").select("*").order("id"),
           supabase.from("services").select("*").order("name"),
@@ -227,9 +325,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           supabase.from("payments").select("*").order("date", { ascending: false }),
           supabase.from("intake_forms").select("*").order("uploaded_at", { ascending: false }),
           supabase.from("client_notes").select("*").order("date", { ascending: false }),
+          supabase.from("rooms").select("*").order("sort"),
+          supabase.from("availability_rules").select("*"),
+          supabase.from("availability_overrides").select("*").order("date"),
+          supabase.from("time_blocks").select("*").order("start_at"),
+          supabase.from("app_settings").select("*"),
         ]);
 
-      const failed = [loc, svc, stf, cli, appt, prod, plan, mem, pkg, cpkg, exp, pay, forms, notes].find(
+      const failed = [loc, svc, stf, cli, appt, prod, plan, mem, pkg, cpkg, exp, pay, forms, notes, rms, rules, ovr, blocks, settings].find(
         (r) => r.error
       );
       if (failed?.error) throw new Error(failed.error.message);
@@ -249,6 +352,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         payments: ((pay.data ?? []) as PaymentRow[]).map(mapPayment),
         intakeForms: ((forms.data ?? []) as IntakeFormRow[]).map(mapIntakeForm),
         clientNotes: ((notes.data ?? []) as ClientNoteRow[]).map(mapClientNote),
+        rooms: ((rms.data ?? []) as RoomRow[]).map(mapRoom),
+        availabilityRules: ((rules.data ?? []) as AvailabilityRuleRow[]).map(mapAvailabilityRule),
+        availabilityOverrides: ((ovr.data ?? []) as AvailabilityOverrideRow[]).map(mapAvailabilityOverride),
+        timeBlocks: ((blocks.data ?? []) as TimeBlockRow[]).map(mapTimeBlock),
+        appSettings: settings.data?.length
+          ? mapAppSettings((settings.data as AppSettingsRow[])[0])
+          : DEFAULT_APP_SETTINGS,
       });
 
       const {
@@ -297,6 +407,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           duration_min: input.durationMin,
           price: input.price,
           note: input.note ?? null,
+          room_id: input.roomId ?? null,
         })
         .select()
         .single();
@@ -538,6 +649,273 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [supabase]
   );
 
+  const createRoom = React.useCallback(
+    async (input: RoomInput) => {
+      const { data: row, error } = await supabase
+        .from("rooms")
+        .insert({
+          location_id: input.locationId,
+          name: input.name,
+          capacity: input.capacity,
+          categories: input.categories,
+          sort: input.sort ?? 0,
+        })
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      const created = mapRoom(row as RoomRow);
+      setData((prev) => ({
+        ...prev,
+        rooms: [...prev.rooms, created].sort(bySort),
+      }));
+      return created;
+    },
+    [supabase]
+  );
+
+  const updateRoom = React.useCallback(
+    async (id: string, input: RoomInput) => {
+      const { data: row, error } = await supabase
+        .from("rooms")
+        .update({
+          location_id: input.locationId,
+          name: input.name,
+          capacity: input.capacity,
+          categories: input.categories,
+          ...(input.sort !== undefined ? { sort: input.sort } : {}),
+        })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      const updated = mapRoom(row as RoomRow);
+      setData((prev) => ({
+        ...prev,
+        rooms: prev.rooms.map((r) => (r.id === id ? updated : r)).sort(bySort),
+      }));
+    },
+    [supabase]
+  );
+
+  const deleteRoom = React.useCallback(
+    async (id: string) => {
+      const { error } = await supabase.from("rooms").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setData((prev) => ({
+        ...prev,
+        rooms: prev.rooms.filter((r) => r.id !== id),
+      }));
+    },
+    [supabase]
+  );
+
+  const saveAvailabilityRules = React.useCallback(
+    async (staffId: string, rules: NewAvailabilityRule[]) => {
+      const { error: deleteError } = await supabase
+        .from("availability_rules")
+        .delete()
+        .eq("staff_id", staffId);
+      if (deleteError) throw new Error(deleteError.message);
+      let created: AvailabilityRule[] = [];
+      if (rules.length > 0) {
+        const { data: rows, error } = await supabase
+          .from("availability_rules")
+          .insert(
+            rules.map((r) => ({
+              staff_id: staffId,
+              location_id: r.locationId,
+              weekday: r.weekday,
+              start_time: r.startTime,
+              end_time: r.endTime,
+            }))
+          )
+          .select();
+        if (error) {
+          // The delete already committed; keep local state honest about the
+          // now-empty schedule instead of showing stale rules.
+          setData((prev) => ({
+            ...prev,
+            availabilityRules: prev.availabilityRules.filter(
+              (r) => r.staffId !== staffId
+            ),
+          }));
+          throw new Error(error.message);
+        }
+        created = ((rows ?? []) as AvailabilityRuleRow[]).map(
+          mapAvailabilityRule
+        );
+      }
+      setData((prev) => ({
+        ...prev,
+        availabilityRules: [
+          ...prev.availabilityRules.filter((r) => r.staffId !== staffId),
+          ...created,
+        ],
+      }));
+    },
+    [supabase]
+  );
+
+  const addAvailabilityOverride = React.useCallback(
+    async (input: NewOverrideInput) => {
+      const { data: row, error } = await supabase
+        .from("availability_overrides")
+        .insert({
+          staff_id: input.staffId,
+          date: input.dateISO,
+          available: input.available,
+          start_time: input.startTime ?? null,
+          end_time: input.endTime ?? null,
+          note: input.note ?? null,
+        })
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      const created = mapAvailabilityOverride(row as AvailabilityOverrideRow);
+      setData((prev) => ({
+        ...prev,
+        availabilityOverrides: [...prev.availabilityOverrides, created].sort(
+          (a, b) => a.dateISO.localeCompare(b.dateISO)
+        ),
+      }));
+      return created;
+    },
+    [supabase]
+  );
+
+  const deleteAvailabilityOverride = React.useCallback(
+    async (id: string) => {
+      const { error } = await supabase
+        .from("availability_overrides")
+        .delete()
+        .eq("id", id);
+      if (error) throw new Error(error.message);
+      setData((prev) => ({
+        ...prev,
+        availabilityOverrides: prev.availabilityOverrides.filter(
+          (o) => o.id !== id
+        ),
+      }));
+    },
+    [supabase]
+  );
+
+  const addTimeBlock = React.useCallback(
+    async (input: NewTimeBlockInput) => {
+      const { data: row, error } = await supabase
+        .from("time_blocks")
+        .insert({
+          location_id: input.locationId,
+          staff_id: input.staffId ?? null,
+          room_id: input.roomId ?? null,
+          start_at: input.startISO,
+          end_at: input.endISO,
+          reason: input.reason,
+        })
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      const created = mapTimeBlock(row as TimeBlockRow);
+      setData((prev) => ({
+        ...prev,
+        timeBlocks: [...prev.timeBlocks, created].sort(
+          (a, b) =>
+            new Date(a.startISO).getTime() - new Date(b.startISO).getTime()
+        ),
+      }));
+      return created;
+    },
+    [supabase]
+  );
+
+  const deleteTimeBlock = React.useCallback(
+    async (id: string) => {
+      const { error } = await supabase
+        .from("time_blocks")
+        .delete()
+        .eq("id", id);
+      if (error) throw new Error(error.message);
+      setData((prev) => ({
+        ...prev,
+        timeBlocks: prev.timeBlocks.filter((b) => b.id !== id),
+      }));
+    },
+    [supabase]
+  );
+
+  const updateStaff = React.useCallback(
+    async (
+      id: string,
+      input: {
+        serviceIds?: string[];
+        bookable?: boolean;
+        employmentType?: EmploymentType;
+      }
+    ) => {
+      const patch: Record<string, unknown> = {};
+      if (input.serviceIds !== undefined) patch.service_ids = input.serviceIds;
+      if (input.bookable !== undefined) patch.bookable = input.bookable;
+      if (input.employmentType !== undefined)
+        patch.employment_type = input.employmentType;
+      const { data: row, error } = await supabase
+        .from("staff")
+        .update(patch)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      const updated = mapStaff(row as StaffRow);
+      setData((prev) => ({
+        ...prev,
+        allStaff: prev.allStaff.map((s) => (s.id === id ? updated : s)),
+      }));
+    },
+    [supabase]
+  );
+
+  const updateService = React.useCallback(
+    async (
+      id: string,
+      input: { bufferMin?: number; price?: number; durationMin?: number }
+    ) => {
+      const patch: Record<string, unknown> = {};
+      if (input.bufferMin !== undefined) patch.buffer_min = input.bufferMin;
+      if (input.price !== undefined) patch.price = input.price;
+      if (input.durationMin !== undefined)
+        patch.duration_min = input.durationMin;
+      const { data: row, error } = await supabase
+        .from("services")
+        .update(patch)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      const updated = mapService(row as ServiceRow);
+      setData((prev) => ({
+        ...prev,
+        services: prev.services.map((s) => (s.id === id ? updated : s)),
+      }));
+    },
+    [supabase]
+  );
+
+  const updateAppSettings = React.useCallback(
+    async (input: Partial<AppSettings>) => {
+      const patch: Record<string, unknown> = { id: 1 };
+      if (input.onlineBookingEnabled !== undefined)
+        patch.online_booking_enabled = input.onlineBookingEnabled;
+      if (input.minNoticeHours !== undefined)
+        patch.min_notice_hours = input.minNoticeHours;
+      const { error } = await supabase.from("app_settings").upsert(patch);
+      if (error) throw new Error(error.message);
+      setData((prev) => ({
+        ...prev,
+        appSettings: { ...prev.appSettings, ...input },
+      }));
+    },
+    [supabase]
+  );
+
   const value = React.useMemo<DataContextValue>(() => {
     const completedByClient = new Map<string, Appointment[]>();
     for (const a of data.appointments) {
@@ -585,6 +963,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const locationById = new Map(data.locations.map((l) => [l.id, l]));
     const planById = new Map(membershipPlans.map((p) => [p.id, p]));
     const packageById = new Map(data.servicePackages.map((p) => [p.id, p]));
+    const roomById = new Map(data.rooms.map((r) => [r.id, r]));
 
     const clientName = (c: Client | string | undefined): string => {
       const client = typeof c === "string" ? clientById.get(c) : c;
@@ -607,6 +986,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       locationById,
       planById,
       packageById,
+      roomById,
       clientName,
       refresh,
       createAppointment,
@@ -619,6 +999,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       createMembershipPlan,
       createServicePackage,
       addExpense,
+      createRoom,
+      updateRoom,
+      deleteRoom,
+      saveAvailabilityRules,
+      addAvailabilityOverride,
+      deleteAvailabilityOverride,
+      addTimeBlock,
+      deleteTimeBlock,
+      updateStaff,
+      updateService,
+      updateAppSettings,
     };
   }, [
     data,
@@ -636,6 +1027,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     createMembershipPlan,
     createServicePackage,
     addExpense,
+    createRoom,
+    updateRoom,
+    deleteRoom,
+    saveAvailabilityRules,
+    addAvailabilityOverride,
+    deleteAvailabilityOverride,
+    addTimeBlock,
+    deleteTimeBlock,
+    updateStaff,
+    updateService,
+    updateAppSettings,
   ]);
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

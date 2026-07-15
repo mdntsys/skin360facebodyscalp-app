@@ -45,7 +45,8 @@ export function AppointmentDrawer({
   onClose: () => void;
   onUpdateStatus: (id: string, status: AppointmentStatus) => void;
 }) {
-  const { clientById, serviceById, staffById, locationById } = useData();
+  const { clientById, serviceById, staffById, locationById, roomById } =
+    useData();
 
   // Keep the last appointment rendered during the close animation.
   const lastRef = React.useRef<Appointment | null>(null);
@@ -57,6 +58,7 @@ export function AppointmentDrawer({
   const client = clientById.get(appt.clientId);
   const service = serviceById.get(appt.serviceId);
   const staffMember = staffById.get(appt.staffId);
+  const room = appt.roomId ? roomById.get(appt.roomId) : undefined;
   const start = new Date(appt.startISO);
   const initials = client
     ? `${client.firstName[0]}${client.lastName[0]}`
@@ -119,6 +121,7 @@ export function AppointmentDrawer({
             <DetailRow label="Location">
               {locationById.get(appt.locationId)?.shortName}
             </DetailRow>
+            {room && <DetailRow label="Room">{room.name}</DetailRow>}
             <DetailRow label="Status">
               <StatusBadge status={appt.status} />
             </DetailRow>

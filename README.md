@@ -2,7 +2,7 @@
 
 Internal management app for **Skin 360 Face Body Scalp** (Toluca Lake · Valencia) — booking, clients, inventory, and business management. Replaces GlossGenius; lives at `app.skin360facebodyscalp.com`.
 
-**Current state: V1 on a live backend.** Auth (Supabase email/password, invite-only — no self-signup UI) and all business data run on Supabase Postgres with row-level security. Still to come in later phases: payments/POS, file storage (intake form uploads, receipts), email/SMS notifications.
+**Current state: V1 on a live backend.** Auth (Supabase email/password, invite-only — no self-signup UI) and all business data run on Supabase Postgres with row-level security. Includes the scheduling layer: treatment rooms with capacities (Valencia's four rooms seeded; Facial/Body hosts two concurrent sessions; the single nail chair serializes mani/pedi bookings), contractor (1099) weekly availability + time-off overrides, per-service wind-down buffers, time blocks, and a booking-slot engine (`src/lib/scheduling/engine.ts`, vitest-covered) that powers the internal Booking Preview — the same slots the public site will offer once the master "online booking" switch (Settings → Booking, currently OFF) is connected. Valencia is the live location; Toluca Lake is flagged call-only. Still to come in later phases: payments/POS, file storage (intake form uploads, receipts), email/SMS notifications, public booking site.
 
 ## Run it
 

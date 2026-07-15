@@ -1,6 +1,9 @@
 import type {
   Appointment,
   AppointmentStatus,
+  AppSettings,
+  AvailabilityOverride,
+  AvailabilityRule,
   Client,
   ClientNote,
   ClientPackage,
@@ -16,15 +19,22 @@ import type {
   Payment,
   PaymentMethod,
   Product,
+  Room,
   Service,
   ServiceCategory,
   ServicePackage,
   StaffMember,
+  TimeBlock,
 } from "./types";
 
 // Raw Supabase row shapes (snake_case) and mappers into the app's camelCase
 // domain types. Numeric columns pass through Number() because PostgREST can
 // serialize numerics as strings.
+
+// Postgres `time` columns serialize as "HH:MM:SS" — trim to "HH:MM".
+function toHHMM(t: string): string {
+  return t.slice(0, 5);
+}
 
 export interface LocationRow {
   id: string;
@@ -34,6 +44,7 @@ export interface LocationRow {
   city: string;
   phone: string;
   hours: { days: string; open: string; close: string }[];
+  booking_mode: string;
 }
 
 export function mapLocation(r: LocationRow): ClinicLocation {
@@ -45,6 +56,7 @@ export function mapLocation(r: LocationRow): ClinicLocation {
     city: r.city,
     phone: r.phone,
     hours: r.hours ?? [],
+    bookingMode: r.booking_mode as ClinicLocation["bookingMode"],
   };
 }
 
@@ -54,6 +66,7 @@ export interface ServiceRow {
   category: string;
   price: number | string;
   duration_min: number;
+  buffer_min: number | null;
   description: string;
   active: boolean;
 }
@@ -65,6 +78,7 @@ export function mapService(r: ServiceRow): Service {
     category: r.category as ServiceCategory,
     price: Number(r.price),
     durationMin: r.duration_min,
+    bufferMin: Number(r.buffer_min ?? 0),
     description: r.description,
   };
 }
@@ -79,6 +93,8 @@ export interface StaffRow {
   email: string;
   phone: string;
   bookable: boolean;
+  employment_type: string | null;
+  service_ids: string[] | null;
 }
 
 export function mapStaff(r: StaffRow): StaffMember {
@@ -92,6 +108,9 @@ export function mapStaff(r: StaffRow): StaffMember {
     email: r.email,
     phone: r.phone,
     bookable: r.bookable,
+    employmentType: (r.employment_type ??
+      "employee") as StaffMember["employmentType"],
+    serviceIds: r.service_ids ?? [],
   };
 }
 
@@ -139,6 +158,7 @@ export interface AppointmentRow {
   price: number | string;
   status: string;
   note: string | null;
+  room_id: string | null;
 }
 
 export function mapAppointment(r: AppointmentRow): Appointment {
@@ -153,6 +173,106 @@ export function mapAppointment(r: AppointmentRow): Appointment {
     price: Number(r.price),
     status: r.status as AppointmentStatus,
     note: r.note ?? undefined,
+    roomId: r.room_id ?? undefined,
+  };
+}
+
+export interface RoomRow {
+  id: string;
+  location_id: string;
+  name: string;
+  capacity: number;
+  categories: string[];
+  sort: number;
+}
+
+export function mapRoom(r: RoomRow): Room {
+  return {
+    id: r.id,
+    locationId: r.location_id as LocationId,
+    name: r.name,
+    capacity: r.capacity,
+    categories: (r.categories ?? []) as ServiceCategory[],
+    sort: r.sort,
+  };
+}
+
+export interface AvailabilityRuleRow {
+  id: string;
+  staff_id: string;
+  location_id: string;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+}
+
+export function mapAvailabilityRule(r: AvailabilityRuleRow): AvailabilityRule {
+  return {
+    id: r.id,
+    staffId: r.staff_id,
+    locationId: r.location_id as LocationId,
+    weekday: r.weekday,
+    startTime: toHHMM(r.start_time),
+    endTime: toHHMM(r.end_time),
+  };
+}
+
+export interface AvailabilityOverrideRow {
+  id: string;
+  staff_id: string;
+  date: string;
+  available: boolean;
+  start_time: string | null;
+  end_time: string | null;
+  note: string | null;
+}
+
+export function mapAvailabilityOverride(
+  r: AvailabilityOverrideRow
+): AvailabilityOverride {
+  return {
+    id: r.id,
+    staffId: r.staff_id,
+    dateISO: r.date,
+    available: r.available,
+    startTime: r.start_time ? toHHMM(r.start_time) : undefined,
+    endTime: r.end_time ? toHHMM(r.end_time) : undefined,
+    note: r.note ?? undefined,
+  };
+}
+
+export interface TimeBlockRow {
+  id: string;
+  location_id: string;
+  staff_id: string | null;
+  room_id: string | null;
+  start_at: string;
+  end_at: string;
+  reason: string;
+}
+
+export function mapTimeBlock(r: TimeBlockRow): TimeBlock {
+  return {
+    id: r.id,
+    locationId: r.location_id as LocationId,
+    staffId: r.staff_id ?? undefined,
+    roomId: r.room_id ?? undefined,
+    startISO: r.start_at,
+    endISO: r.end_at,
+    reason: r.reason,
+  };
+}
+
+export interface AppSettingsRow {
+  id: number;
+  online_booking_enabled: boolean;
+  min_notice_hours: number;
+}
+
+export function mapAppSettings(r: AppSettingsRow): AppSettings {
+  return {
+    onlineBookingEnabled: r.online_booking_enabled,
+    minNoticeHours: Number(r.min_notice_hours),
   };
 }
 

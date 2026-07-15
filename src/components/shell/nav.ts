@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  CalendarClock,
   CalendarDays,
   Gem,
   Gift,
@@ -20,6 +21,7 @@ export interface NavItem {
 export const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Appointments", href: "/appointments", icon: CalendarDays },
+  { label: "Availability", href: "/availability", icon: CalendarClock },
   { label: "Clients", href: "/clients", icon: Users },
   { label: "Inventory", href: "/inventory", icon: Package },
   { label: "Memberships", href: "/memberships", icon: Gem },
