@@ -70,45 +70,80 @@ if (!loc.ok) process.exit(1);
 const locationId = loc.json.locations?.[0]?.id;
 console.log(`   location: ${locationId} (${loc.json.locations?.[0]?.name})`);
 
-// ── 2. Bookable service in the catalog ──────────────────────────────────────
-const catalog = await api("Create bookable service", "POST", "/v2/catalog/object", {
-  idempotency_key: randomUUID(),
-  object: {
-    type: "ITEM",
-    id: "#spike-service",
-    item_data: {
-      name: "Spike Facial",
-      product_type: "APPOINTMENTS_SERVICE",
-      variations: [
-        {
-          type: "ITEM_VARIATION",
-          id: "#spike-service-60",
-          item_variation_data: {
-            name: "60 min",
-            pricing_type: "FIXED_PRICING",
-            price_money: { amount: 10000, currency: "USD" },
-            service_duration: 60 * 60 * 1000,
-            available_for_booking: true,
-          },
-        },
-      ],
+// ── 2. Team member (reuse "Spike Tester" if present — the sandbox dashboard
+//      made the first one bookable with Mon–Fri 9–5 hours) ────────────────────
+const search = await api("Find team member", "POST", "/v2/team-members/search", {
+  query: { filter: { status: "ACTIVE" } },
+});
+let teamMemberId = search.json.team_members?.find(
+  (t) => t.given_name === "Spike" && t.family_name === "Tester"
+)?.id;
+if (!teamMemberId) {
+  const tm = await api("Create team member", "POST", "/v2/team-members", {
+    idempotency_key: randomUUID(),
+    team_member: {
+      given_name: "Spike",
+      family_name: "Tester",
+      assigned_locations: {
+        assignment_type: "ALL_CURRENT_AND_FUTURE_LOCATIONS",
+      },
     },
-  },
-});
-const variation = catalog.json.catalog_object?.item_data?.variations?.[0];
-const serviceVariationId = variation?.id;
-const serviceVariationVersion = variation?.version;
+  });
+  teamMemberId = tm.json.team_member?.id;
+}
+console.log(`   team member: ${teamMemberId}`);
 
-// ── 3. Team member ──────────────────────────────────────────────────────────
-const tm = await api("Create team member", "POST", "/v2/team-members", {
-  idempotency_key: randomUUID(),
-  team_member: {
-    given_name: "Spike",
-    family_name: "Tester",
-    assigned_locations: { assignment_type: "ALL_CURRENT_AND_FUTURE_LOCATIONS" },
-  },
-});
-const teamMemberId = tm.json.team_member?.id;
+// ── 3. Bookable service performed by that team member ───────────────────────
+const found = await api(
+  "Find existing service",
+  "POST",
+  "/v2/catalog/search-catalog-items",
+  { text_filter: "Spike Facial", product_types: ["APPOINTMENTS_SERVICE"] }
+);
+let serviceVariationId, serviceVariationVersion;
+const existing = found.json.items?.[0];
+if (existing) {
+  // Re-upsert with the team member attached (availability search only matches
+  // services whose variation lists the team member in team_member_ids).
+  const v = existing.item_data.variations[0];
+  v.item_variation_data.team_member_ids = [teamMemberId];
+  const upd = await api("Assign service to team member", "POST", "/v2/catalog/object", {
+    idempotency_key: randomUUID(),
+    object: existing,
+  });
+  const uv = upd.json.catalog_object?.item_data?.variations?.[0];
+  serviceVariationId = uv?.id ?? v.id;
+  serviceVariationVersion = uv?.version ?? v.version;
+} else {
+  const catalog = await api("Create bookable service", "POST", "/v2/catalog/object", {
+    idempotency_key: randomUUID(),
+    object: {
+      type: "ITEM",
+      id: "#spike-service",
+      item_data: {
+        name: "Spike Facial",
+        product_type: "APPOINTMENTS_SERVICE",
+        variations: [
+          {
+            type: "ITEM_VARIATION",
+            id: "#spike-service-60",
+            item_variation_data: {
+              name: "60 min",
+              pricing_type: "FIXED_PRICING",
+              price_money: { amount: 10000, currency: "USD" },
+              service_duration: 60 * 60 * 1000,
+              available_for_booking: true,
+              team_member_ids: [teamMemberId],
+            },
+          },
+        ],
+      },
+    },
+  });
+  const variation = catalog.json.catalog_object?.item_data?.variations?.[0];
+  serviceVariationId = variation?.id;
+  serviceVariationVersion = variation?.version;
+}
 
 // ── 4. Availability (what the website calendar would show) ──────────────────
 const avail = await api(
@@ -141,13 +176,22 @@ if (avail.ok && slots.length === 0)
       " yet — enable them for Appointments in the sandbox Seller Dashboard."
   );
 
-// ── 5. Booking create → cancel ──────────────────────────────────────────────
+// ── 5. Customer + booking create → cancel ───────────────────────────────────
+const customer = await api("Create customer", "POST", "/v2/customers", {
+  idempotency_key: randomUUID(),
+  given_name: "Spike",
+  family_name: "Customer",
+  email_address: "spike-customer@example.com",
+});
+const customerId = customer.json.customer?.id;
+
 const startAt = slots[0]?.start_at ?? in2days.toISOString();
 const booking = await api("Create booking", "POST", "/v2/bookings", {
   idempotency_key: randomUUID(),
   booking: {
     location_id: locationId,
     start_at: startAt,
+    customer_id: customerId,
     appointment_segments: [
       {
         team_member_id: teamMemberId,
@@ -186,7 +230,7 @@ if (giftCardId) {
   const activate = await api(
     "Activate gift card ($50)",
     "POST",
-    "/v2/gift-card-activities",
+    "/v2/gift-cards/activities",
     {
       idempotency_key: randomUUID(),
       gift_card_activity: {
@@ -203,7 +247,7 @@ if (giftCardId) {
   if (activate.ok) {
     const gan = activate.json.gift_card_activity?.gift_card_gan;
     console.log(`   GAN (the number the Terminal types/scans): ${gan}`);
-    await api("Redeem $20 from gift card", "POST", "/v2/gift-card-activities", {
+    await api("Redeem $20 from gift card", "POST", "/v2/gift-cards/activities", {
       idempotency_key: randomUUID(),
       gift_card_activity: {
         type: "REDEEM",
