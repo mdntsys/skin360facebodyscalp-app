@@ -1,7 +1,20 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+/** Customer-facing booking surface — no session required. */
+function isPublicBookingPath(path: string): boolean {
+  return (
+    path === "/book" ||
+    path.startsWith("/book/") ||
+    path.startsWith("/api/booking/")
+  );
+}
+
 export async function updateSession(request: NextRequest) {
+  if (isPublicBookingPath(request.nextUrl.pathname)) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

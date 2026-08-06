@@ -48,6 +48,11 @@ export interface BridgeService {
   durationMin: number;
   /** null = category we can't map; such bookings/slots skip room checks. */
   roomCategory: ServiceCategory | null;
+  /** Square catalog extras used by the public booking flow. */
+  squareCategory?: string;
+  priceCents?: number;
+  version?: number;
+  teamMemberIds?: string[];
 }
 
 /** One existing Square booking segment, flattened. */
@@ -181,10 +186,12 @@ interface SquareCatalogResponse {
       reporting_category?: { id: string };
       variations?: Array<{
         id: string;
+        version?: number;
         item_variation_data?: {
           name?: string;
           service_duration?: number;
           team_member_ids?: string[];
+          price_money?: { amount?: number };
         };
       }>;
     };
@@ -232,6 +239,10 @@ export async function fetchBridgeServices(): Promise<Map<string, BridgeService>>
           name: item.item_data?.name ?? "Service",
           durationMin: Math.round(ms / 60000),
           roomCategory: roomCategoryForSquareCategory(categoryName),
+          squareCategory: categoryName,
+          priceCents: v.item_variation_data?.price_money?.amount,
+          version: v.version,
+          teamMemberIds: v.item_variation_data?.team_member_ids,
         });
       }
     }
