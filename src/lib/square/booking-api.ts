@@ -7,7 +7,12 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-import type { Room } from "../../data/types";
+import type {
+  AvailabilityOverride,
+  AvailabilityRule,
+  Room,
+  TimeBlock,
+} from "../../data/types";
 import {
   checkSlot,
   fetchBridgeBookings,
@@ -17,11 +22,16 @@ import {
   type BridgeSlot,
 } from "./booking-bridge";
 import { square, SquareApiError } from "./client";
+import { slotWithinSchedule } from "./schedule-filter";
 
 export interface BookingConfig {
   onlineBookingEnabled: boolean;
   minNoticeHours: number;
   rooms: Room[];
+  staffSquareIds: Record<string, string>;
+  availabilityRules: AvailabilityRule[];
+  availabilityOverrides: AvailabilityOverride[];
+  timeBlocks: TimeBlock[];
 }
 
 export async function getBookingConfig(): Promise<BookingConfig> {
@@ -129,7 +139,8 @@ export async function publicAvailability(args: {
 }): Promise<BridgeSlot[]> {
   const config = await getBookingConfig();
   const services = await fetchBridgeServices();
-  return roomSafeAvailability({
+  const durationMin = services.get(args.serviceVariationId)?.durationMin ?? 0;
+  const slots = await roomSafeAvailability({
     locationId: locationId(),
     serviceVariationId: args.serviceVariationId,
     teamMemberIds: args.teamMemberId ? [args.teamMemberId] : undefined,
@@ -138,6 +149,9 @@ export async function publicAvailability(args: {
     rooms: config.rooms,
     services,
   });
+  return slots.filter((slot) =>
+    slotWithinSchedule(config, slot.teamMemberId, slot.startAt, durationMin)
+  );
 }
 
 // --- Create ------------------------------------------------------------------
@@ -229,6 +243,11 @@ export async function createPublicBooking(args: {
     throw new Error(
       "That time was just taken. Please pick another time."
     );
+  }
+  if (
+    !slotWithinSchedule(config, args.teamMemberId, args.startAt, service.durationMin)
+  ) {
+    throw new Error("That time isn't available. Please pick another time.");
   }
 
   const customerId = await findOrCreateCustomer(args.customer);
