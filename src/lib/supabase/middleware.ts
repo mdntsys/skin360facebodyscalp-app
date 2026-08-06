@@ -1,12 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-/** Customer-facing booking surface — no session required. */
+/** Customer-facing booking + gift card surface — no session required. */
 function isPublicBookingPath(path: string): boolean {
   return (
     path === "/book" ||
     path.startsWith("/book/") ||
-    path.startsWith("/api/booking/")
+    path === "/gift-cards" ||
+    path.startsWith("/gift-cards/") ||
+    path.startsWith("/api/booking/") ||
+    path.startsWith("/api/gift-cards/")
   );
 }
 
