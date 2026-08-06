@@ -22,9 +22,11 @@ import { Label } from "@/components/ui/label";
 const SERVICE_CATEGORIES: ServiceCategory[] = [
   "Facials",
   "Advanced Treatments",
+  "Face Add-Ons",
   "Body",
   "Scalp",
   "Nails",
+  "Lash + Brow + Wax",
 ];
 
 const fieldClass =

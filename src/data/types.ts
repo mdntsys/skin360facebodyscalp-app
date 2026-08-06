@@ -16,9 +16,11 @@ export interface ClinicLocation {
 export type ServiceCategory =
   | "Facials"
   | "Advanced Treatments"
+  | "Face Add-Ons"
   | "Body"
   | "Scalp"
-  | "Nails";
+  | "Nails"
+  | "Lash + Brow + Wax";
 
 export interface Service {
   id: string;

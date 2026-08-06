@@ -29,9 +29,11 @@ import { Switch } from "@/components/ui/switch";
 const SERVICE_CATEGORIES: ServiceCategory[] = [
   "Facials",
   "Advanced Treatments",
+  "Face Add-Ons",
   "Body",
   "Scalp",
   "Nails",
+  "Lash + Brow + Wax",
 ];
 
 const EMPLOYMENT_LABELS: Record<EmploymentType, string> = {
