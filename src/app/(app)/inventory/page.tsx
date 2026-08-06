@@ -37,6 +37,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  BRAND_CATEGORIES,
   ProductFormDialog,
   type ProductFormValues,
 } from "./_components/product-form-dialog";
@@ -64,6 +65,14 @@ function InventoryInner() {
   const categories = React.useMemo(
     () => Array.from(new Set(products.map((p) => p.category))).sort(),
     [products]
+  );
+
+  // The form also offers Carolina's brand lines even before any product uses them;
+  // the filter above stays product-derived so it never lists empty categories.
+  const formCategories = React.useMemo(
+    () =>
+      Array.from(new Set([...BRAND_CATEGORIES, ...categories])).sort(),
+    [categories]
   );
 
   const lowStockCount = products.filter(
@@ -343,7 +352,7 @@ function InventoryInner() {
       <ProductFormDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        categories={categories}
+        categories={formCategories}
         product={editing}
         onSubmit={handleSubmit}
       />

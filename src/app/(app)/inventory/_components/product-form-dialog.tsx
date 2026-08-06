@@ -24,6 +24,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+/** Carolina's product lines — always offered in the category picker, even before any product uses them. */
+export const BRAND_CATEGORIES = [
+  "DMK",
+  "DMK MD",
+  "Dermalogica",
+  "Marini",
+  "Oxygen Ceutical",
+  "Epicutis",
+  "Face Reality",
+];
+
+const NEW_CATEGORY = "__new__";
+
 export interface ProductFormValues {
   name: string;
   category: string;
@@ -84,6 +97,7 @@ export function ProductFormDialog({
   const [submitting, setSubmitting] = React.useState(false);
   const [name, setName] = React.useState("");
   const [category, setCategory] = React.useState("");
+  const [newCategory, setNewCategory] = React.useState("");
   const [sku, setSku] = React.useState("");
   const [inStock, setInStock] = React.useState("0");
   const [threshold, setThreshold] = React.useState("4");
@@ -95,6 +109,7 @@ export function ProductFormDialog({
     if (!open) return;
     setName(product?.name ?? "");
     setCategory(product?.category ?? "");
+    setNewCategory("");
     setSku(product?.sku ?? "");
     setInStock(String(product?.inStock ?? 0));
     setThreshold(String(product?.lowStockThreshold ?? 4));
@@ -109,11 +124,17 @@ export function ProductFormDialog({
       toast.error("Please enter a product name.");
       return;
     }
+    if (category === NEW_CATEGORY && !newCategory.trim()) {
+      toast.error("Please enter a name for the new category.");
+      return;
+    }
+    const resolvedCategory =
+      category === NEW_CATEGORY ? newCategory.trim() : category;
     setSubmitting(true);
     try {
       await onSubmit({
         name: name.trim(),
-        category: category || "Uncategorized",
+        category: resolvedCategory || "Uncategorized",
         sku: sku.trim() || "—",
         inStock: Math.max(0, Math.round(Number(inStock) || 0)),
         lowStockThreshold: Math.max(0, Math.round(Number(threshold) || 0)),
@@ -182,8 +203,21 @@ export function ProductFormDialog({
                       {c}
                     </SelectItem>
                   ))}
+                  <SelectItem value={NEW_CATEGORY}>
+                    + Add new category…
+                  </SelectItem>
                 </SelectContent>
               </Select>
+              {category === NEW_CATEGORY && (
+                <Input
+                  id="product-new-category"
+                  autoFocus
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  placeholder="New category name"
+                  className={fieldClass}
+                />
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="product-sku" className={labelClass}>
