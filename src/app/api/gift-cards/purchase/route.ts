@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { bookingSurfaceEnabled } from "@/lib/square/booking-api";
+import { bookingSurfaceEnabled } from "@/lib/booking/public-api";
 import { purchaseGiftCard } from "@/lib/square/gift-cards";
 
 export const dynamic = "force-dynamic";

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 
 import {
+  BookingError,
   bookingSurfaceEnabled,
   createPublicBooking,
-} from "@/lib/square/booking-api";
-import { SquareApiError } from "@/lib/square/client";
+} from "@/lib/booking/public-api";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +51,6 @@ export async function POST(request: Request) {
   try {
     const result = await createPublicBooking({
       serviceVariationId,
-      serviceVariationVersion: body.serviceVariationVersion,
       teamMemberId,
       startAt,
       note: body.note?.slice(0, 500),
@@ -64,16 +63,13 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(result);
   } catch (err) {
-    if (err instanceof SquareApiError) {
-      console.error("booking/create Square error:", err.message);
-      return NextResponse.json(
-        { error: "That time is no longer available. Please pick another." },
-        { status: 409 }
-      );
+    if (err instanceof BookingError) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
     }
-    const message =
-      err instanceof Error ? err.message : "Something went wrong.";
     console.error("booking/create failed:", err);
-    return NextResponse.json({ error: message }, { status: 409 });
+    return NextResponse.json(
+      { error: "Something went wrong. Please try again." },
+      { status: 500 }
+    );
   }
 }

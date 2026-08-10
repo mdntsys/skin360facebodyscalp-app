@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 
 import {
   bookingSurfaceEnabled,
-  getBookingConfig,
+  getPublicBookingData,
   publicAvailability,
-} from "@/lib/square/booking-api";
+} from "@/lib/booking/public-api";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +27,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    const config = await getBookingConfig();
+    const { settings } = await getPublicBookingData();
     const earliest = new Date(
-      Date.now() + config.minNoticeHours * 60 * 60 * 1000
+      Date.now() + settings.minNoticeHours * 60 * 60 * 1000
     );
     const requested = new Date(startParam);
     const start = requested > earliest ? requested : earliest;

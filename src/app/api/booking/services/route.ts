@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import {
   bookingSurfaceEnabled,
   listPublicServices,
-} from "@/lib/square/booking-api";
+} from "@/lib/booking/public-api";
 
 export const dynamic = "force-dynamic";
 

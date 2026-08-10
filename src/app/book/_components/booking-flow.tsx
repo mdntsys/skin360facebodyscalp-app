@@ -1,8 +1,8 @@
 "use client";
 
 // Customer booking flow: service -> girl -> time -> details -> confirmed.
-// All availability comes from /api/booking/* which layers the room engine
-// over Square's live calendar; times shown are salon-local (Pacific).
+// All availability comes from /api/booking/* which runs the app's own
+// scheduling engine (rooms + real schedules); times are salon-local (Pacific).
 
 import * as React from "react";
 

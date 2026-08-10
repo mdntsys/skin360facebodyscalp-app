@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { bookingSurfaceEnabled } from "@/lib/square/booking-api";
+import { bookingSurfaceEnabled } from "@/lib/booking/public-api";
 import { BookingFlow } from "./_components/booking-flow";
 
 export const dynamic = "force-dynamic";
