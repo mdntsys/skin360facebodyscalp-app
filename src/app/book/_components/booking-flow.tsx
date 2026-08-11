@@ -1,12 +1,18 @@
 "use client";
 
-// Customer booking flow: service -> girl -> time -> details -> confirmed.
+// Customer booking flow: service -> add-ons -> girl -> time -> details -> confirmed.
 // All availability comes from /api/booking/* which runs the app's own
 // scheduling engine (rooms + real schedules); times are salon-local (Pacific).
+// Add-ons only appear after a main service is chosen (Carolina's rule) and
+// extend the same appointment block.
 
 import * as React from "react";
 
 const TZ = "America/Los_Angeles";
+
+// Booking window: 5 pages of 7 days ≈ "a whole month in advance".
+const MAX_WEEK_PAGE = 4;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface PublicService {
   variationId: string;
@@ -14,6 +20,15 @@ interface PublicService {
   durationMin: number;
   priceCents: number | null;
   category: string;
+  teamMemberIds: string[];
+}
+
+interface PublicAddon {
+  variationId: string;
+  name: string;
+  durationMin: number;
+  priceCents: number;
+  addonFor: string[];
   teamMemberIds: string[];
 }
 
@@ -28,7 +43,7 @@ interface Slot {
   serviceVariationVersion?: number;
 }
 
-type Step = "service" | "staff" | "time" | "details" | "done";
+type Step = "service" | "addons" | "staff" | "time" | "details" | "done";
 
 const dayKeyFormat = new Intl.DateTimeFormat("en-CA", {
   timeZone: TZ,
@@ -39,6 +54,11 @@ const dayKeyFormat = new Intl.DateTimeFormat("en-CA", {
 const dayLabelFormat = new Intl.DateTimeFormat("en-US", {
   timeZone: TZ,
   weekday: "short",
+  month: "short",
+  day: "numeric",
+});
+const rangeFormat = new Intl.DateTimeFormat("en-US", {
+  timeZone: TZ,
   month: "short",
   day: "numeric",
 });
@@ -58,6 +78,7 @@ const longFormat = new Intl.DateTimeFormat("en-US", {
 
 function price(cents: number | null): string {
   if (cents == null) return "";
+  if (cents === 0) return "Price at consult";
   return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 }
 
@@ -67,15 +88,20 @@ const buttonClass =
   "w-full rounded-full bg-ink px-6 py-3 text-sm font-medium text-ivory transition hover:bg-ink-soft disabled:opacity-40";
 const fieldClass =
   "h-11 w-full rounded-full border border-line bg-ivory/50 px-4 text-sm text-ink outline-none focus:border-gold-300";
+const pagerButtonClass =
+  "rounded-full border border-line bg-white px-3 py-1 text-sm text-ink-soft transition hover:bg-cream disabled:opacity-30";
 
 export function BookingFlow() {
   const [step, setStep] = React.useState<Step>("service");
   const [services, setServices] = React.useState<PublicService[]>([]);
+  const [addons, setAddons] = React.useState<PublicAddon[]>([]);
   const [staff, setStaff] = React.useState<PublicStaff[]>([]);
   const [loadError, setLoadError] = React.useState(false);
 
   const [service, setService] = React.useState<PublicService | null>(null);
+  const [addonIds, setAddonIds] = React.useState<string[]>([]);
   const [staffChoice, setStaffChoice] = React.useState<string | "any">("any");
+  const [weekPage, setWeekPage] = React.useState(0);
   const [slots, setSlots] = React.useState<Slot[] | null>(null);
   const [slot, setSlot] = React.useState<Slot | null>(null);
 
@@ -93,10 +119,17 @@ export function BookingFlow() {
   React.useEffect(() => {
     fetch("/api/booking/services")
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data: { services: PublicService[]; staff: PublicStaff[] }) => {
-        setServices(data.services);
-        setStaff(data.staff);
-      })
+      .then(
+        (data: {
+          services: PublicService[];
+          addons?: PublicAddon[];
+          staff: PublicStaff[];
+        }) => {
+          setServices(data.services);
+          setAddons(data.addons ?? []);
+          setStaff(data.staff);
+        }
+      )
       .catch(() => setLoadError(true));
   }, []);
 
@@ -105,14 +138,32 @@ export function BookingFlow() {
     setSlots(null);
     const params = new URLSearchParams({
       service: service.variationId,
-      start: new Date().toISOString(),
+      start: new Date(Date.now() + weekPage * WEEK_MS).toISOString(),
     });
     if (staffChoice !== "any") params.set("staff", staffChoice);
+    if (addonIds.length > 0) params.set("addons", addonIds.join(","));
     fetch(`/api/booking/availability?${params.toString()}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data: { slots: Slot[] }) => setSlots(data.slots))
       .catch(() => setSlots([]));
-  }, [step, service, staffChoice]);
+  }, [step, service, staffChoice, addonIds, weekPage]);
+
+  const compatibleAddons = service
+    ? addons.filter((a) => a.addonFor.includes(service.category))
+    : [];
+  const chosenAddons = compatibleAddons.filter((a) =>
+    addonIds.includes(a.variationId)
+  );
+  const totalMin = service
+    ? service.durationMin + chosenAddons.reduce((s, a) => s + a.durationMin, 0)
+    : 0;
+  const totalCents =
+    service?.priceCents == null
+      ? null
+      : service.priceCents +
+        chosenAddons.reduce((s, a) => s + a.priceCents, 0);
+  const priceIsFirm =
+    service?.priceCents !== 0 && chosenAddons.every((a) => a.priceCents !== 0);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -128,6 +179,7 @@ export function BookingFlow() {
           serviceVariationVersion: slot.serviceVariationVersion,
           teamMemberId: slot.teamMemberId,
           startAt: slot.startAt,
+          addonIds,
           note,
           customer: { givenName, familyName, email, phone },
         }),
@@ -163,6 +215,11 @@ export function BookingFlow() {
         <p className="font-heading text-3xl text-ink">You&apos;re booked!</p>
         <p className="mt-4 text-sm text-ink-soft">
           {service.name}
+          {chosenAddons.map((a) => (
+            <span key={a.variationId} className="block text-xs text-muted-warm">
+              + {a.name}
+            </span>
+          ))}
           <br />
           {longFormat.format(new Date(confirmed.startAt))} with {staffName}
         </p>
@@ -200,9 +257,14 @@ export function BookingFlow() {
                     type="button"
                     onClick={() => {
                       setService(s);
+                      setAddonIds([]);
                       setStaffChoice("any");
+                      setWeekPage(0);
                       setSlot(null);
-                      setStep("staff");
+                      const hasAddons = addons.some((a) =>
+                        a.addonFor.includes(s.category)
+                      );
+                      setStep(hasAddons ? "addons" : "staff");
                     }}
                     className={`flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-cream ${
                       i < arr.length - 1 ? "border-b border-line" : ""
@@ -230,17 +292,95 @@ export function BookingFlow() {
 
   if (!service) return null;
 
-  const performers = staff.filter((s) =>
-    service.teamMemberIds.includes(s.id)
+  const performers = staff.filter(
+    (s) =>
+      service.teamMemberIds.includes(s.id) &&
+      chosenAddons.every((a) => a.teamMemberIds.includes(s.id))
   );
+
+  // ---- Step: add-ons --------------------------------------------------------
+  if (step === "addons") {
+    return (
+      <div className="space-y-4">
+        <BackBar
+          label={service.name}
+          onBack={() => setStep("service")}
+        />
+        <p className="px-2 text-xs tracking-wide uppercase text-muted-warm">
+          Add to your visit (optional)
+        </p>
+        <div className="overflow-hidden rounded-3xl border border-line bg-white">
+          {compatibleAddons.map((a, i, arr) => {
+            const selected = addonIds.includes(a.variationId);
+            return (
+              <button
+                key={a.variationId}
+                type="button"
+                onClick={() =>
+                  setAddonIds((ids) =>
+                    selected
+                      ? ids.filter((id) => id !== a.variationId)
+                      : [...ids, a.variationId]
+                  )
+                }
+                className={`flex w-full items-center justify-between px-5 py-4 text-left transition ${
+                  selected ? "bg-gold-50" : "hover:bg-cream"
+                } ${i < arr.length - 1 ? "border-b border-line" : ""}`}
+              >
+                <span className="flex items-center gap-3">
+                  <span
+                    aria-hidden
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] ${
+                      selected
+                        ? "border-gold-300 bg-gold-300 text-white"
+                        : "border-line text-transparent"
+                    }`}
+                  >
+                    ✓
+                  </span>
+                  <span>
+                    <span className="block text-sm font-medium text-ink">
+                      {a.name}
+                    </span>
+                    <span className="block text-xs font-light text-muted-warm">
+                      +{a.durationMin} min
+                    </span>
+                  </span>
+                </span>
+                <span className="text-sm text-ink-soft">
+                  {price(a.priceCents)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={() => setStep("staff")}
+          className={buttonClass}
+        >
+          {addonIds.length > 0
+            ? `Continue with ${addonIds.length} add-on${
+                addonIds.length > 1 ? "s" : ""
+              }`
+            : "No thanks, continue"}
+        </button>
+      </div>
+    );
+  }
 
   // ---- Step: pick a girl ----------------------------------------------------
   if (step === "staff") {
     return (
       <div className="space-y-4">
         <BackBar
-          label={service.name}
-          onBack={() => setStep("service")}
+          label={
+            service.name +
+            chosenAddons.map((a) => ` + ${a.name}`).join("")
+          }
+          onBack={() =>
+            setStep(compatibleAddons.length > 0 ? "addons" : "service")
+          }
         />
         <div className="overflow-hidden rounded-3xl border border-line bg-white">
           {[{ id: "any" as const, name: "First available" }, ...performers].map(
@@ -250,6 +390,7 @@ export function BookingFlow() {
                 type="button"
                 onClick={() => {
                   setStaffChoice(s.id);
+                  setWeekPage(0);
                   setSlot(null);
                   setStep("time");
                 }}
@@ -274,24 +415,54 @@ export function BookingFlow() {
       const key = dayKeyFormat.format(new Date(s.startAt));
       byDay.set(key, [...(byDay.get(key) ?? []), s]);
     }
+    // Label the visible 7-day page; page 0 starts tomorrow (no same-day online).
+    const pageStart = new Date(
+      Date.now() + (weekPage === 0 ? 24 * 60 * 60 * 1000 : weekPage * WEEK_MS)
+    );
+    const pageEnd = new Date(
+      Date.now() + weekPage * WEEK_MS + WEEK_MS - 24 * 60 * 60 * 1000
+    );
     return (
       <div className="space-y-4">
         <BackBar
-          label={`${service.name} · ${
+          label={`${service.name}${chosenAddons
+            .map((a) => ` + ${a.name}`)
+            .join("")} · ${
             staffChoice === "any"
               ? "First available"
               : staff.find((s) => s.id === staffChoice)?.name
           }`}
           onBack={() => setStep("staff")}
         />
+        <div className="flex items-center justify-between px-1">
+          <button
+            type="button"
+            disabled={weekPage === 0}
+            onClick={() => setWeekPage((p) => Math.max(0, p - 1))}
+            className={pagerButtonClass}
+          >
+            ‹ Earlier
+          </button>
+          <span className="text-xs tracking-wide uppercase text-muted-warm">
+            {rangeFormat.format(pageStart)} – {rangeFormat.format(pageEnd)}
+          </span>
+          <button
+            type="button"
+            disabled={weekPage === MAX_WEEK_PAGE}
+            onClick={() => setWeekPage((p) => Math.min(MAX_WEEK_PAGE, p + 1))}
+            className={pagerButtonClass}
+          >
+            Later ›
+          </button>
+        </div>
         {slots === null ? (
           <div className={`${cardClass} text-center text-sm text-muted-warm`}>
             Finding open times…
           </div>
         ) : byDay.size === 0 ? (
           <div className={`${cardClass} text-center text-sm text-muted-warm`}>
-            No openings in the next week. Try another girl, or call us — we may
-            fit you in.
+            No openings on these days. Try another week or another girl — or
+            call us and we may fit you in. (For today, always call.)
           </div>
         ) : (
           [...byDay.entries()].map(([day, daySlots]) => (
@@ -332,9 +503,22 @@ export function BookingFlow() {
           onBack={() => setStep("time")}
         />
         <form onSubmit={submit} className={`${cardClass} space-y-4`}>
-          <div className="rounded-2xl bg-cream px-4 py-3 text-sm text-ink-soft">
-            {service.name} · {service.durationMin} min ·{" "}
-            {price(service.priceCents)}
+          <div className="space-y-1 rounded-2xl bg-cream px-4 py-3 text-sm text-ink-soft">
+            <p>
+              {service.name} · {service.durationMin} min ·{" "}
+              {price(service.priceCents)}
+            </p>
+            {chosenAddons.map((a) => (
+              <p key={a.variationId} className="text-xs text-muted-warm">
+                + {a.name} · {a.durationMin} min · {price(a.priceCents)}
+              </p>
+            ))}
+            {chosenAddons.length > 0 && (
+              <p className="pt-1 text-xs font-medium text-ink">
+                Total · {totalMin} min ·{" "}
+                {priceIsFirm ? price(totalCents) : "final price at your visit"}
+              </p>
+            )}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <input

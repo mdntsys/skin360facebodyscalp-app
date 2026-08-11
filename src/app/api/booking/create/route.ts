@@ -13,6 +13,7 @@ interface CreateBody {
   serviceVariationVersion?: number;
   teamMemberId?: string;
   startAt?: string;
+  addonIds?: unknown;
   note?: string;
   customer?: {
     givenName?: string;
@@ -48,11 +49,19 @@ export async function POST(request: Request) {
     );
   }
 
+  const addonIds = Array.isArray(body.addonIds)
+    ? body.addonIds
+        .filter((id): id is string => typeof id === "string")
+        .map((id) => id.slice(0, 100))
+        .slice(0, 8)
+    : [];
+
   try {
     const result = await createPublicBooking({
       serviceVariationId,
       teamMemberId,
       startAt,
+      addonIds,
       note: body.note?.slice(0, 500),
       customer: {
         givenName: customer.givenName.trim().slice(0, 100),

@@ -18,6 +18,8 @@ function mkData(): PublicBookingData {
     { id: "svc-facial", name: "Classic Facial", category: "Facials" as const, price: 145, durationMin: 55, bufferMin: 15, description: "" },
     { id: "svc-body", name: "Lymphatic Drainage", category: "Body" as const, price: 195, durationMin: 55, bufferMin: 15, description: "" },
     { id: "svc-mani", name: "Gel Manicure", category: "Nails" as const, price: 40, durationMin: 45, bufferMin: 15, description: "" },
+    { id: "svc-gold", name: "24K Gold Therapy", category: "Face Add-Ons" as const, price: 100, durationMin: 25, bufferMin: 0, description: "", addonFor: ["Facials", "Advanced Treatments"] },
+    { id: "svc-french", name: "French Tip w/Service", category: "Nails" as const, price: 10, durationMin: 30, bufferMin: 0, description: "", addonFor: ["Nails"] },
   ];
   return {
     settings: { onlineBookingEnabled: true, minNoticeHours: 0 },
@@ -31,9 +33,10 @@ function mkData(): PublicBookingData {
     serviceById: new Map(services.map((s) => [s.id, s])),
     staff: [
       { id: "staff-karen", name: "Karen Paredes", bookable: true, serviceIds: ["svc-body"] },
-      { id: "staff-josseline", name: "Josseline Mejia", bookable: true, serviceIds: ["svc-facial"] },
+      { id: "staff-josseline", name: "Josseline Mejia", bookable: true, serviceIds: ["svc-facial", "svc-gold"] },
       { id: "staff-gloria", name: "Gloria Sanchez", bookable: true, serviceIds: ["svc-facial"] },
-      { id: "staff-cassie", name: "Cassie Hughes", bookable: true, serviceIds: ["svc-mani"] },
+      // Cassie does the nail add-ons; Vero only the mani itself.
+      { id: "staff-cassie", name: "Cassie Hughes", bookable: true, serviceIds: ["svc-mani", "svc-french"] },
       { id: "staff-vero", name: "Vero Alvarez", bookable: true, serviceIds: ["svc-mani"] },
       { id: "staff-carolina", name: "Carolina", bookable: true, serviceIds: [] },
     ],
@@ -140,6 +143,64 @@ describe("computeSlots", () => {
     expect(Math.min(...slots.map((s) => ms(s.startAt)))).toBe(
       ms("2027-08-09T11:00:00-07:00")
     );
+  });
+
+  it("an add-on extends the block: Josseline's last facial start moves earlier", () => {
+    const base = {
+      serviceVariationId: "svc-facial",
+      teamMemberId: "staff-josseline",
+      ...MON,
+    };
+    const noAddon = computeSlots(mkData(), [], base);
+    // 55-min facial fits until 17:00 in a 10:00-18:00 day.
+    expect(noAddon.map((s) => ms(s.startAt))).toContain(
+      ms("2027-08-09T17:00:00-07:00")
+    );
+    // +25-min gold therapy -> 80 min -> nothing later than 16:30.
+    const withAddon = computeSlots(mkData(), [], {
+      ...base,
+      addonIds: ["svc-gold"],
+    });
+    expect(withAddon.length).toBeGreaterThan(0);
+    expect(Math.max(...withAddon.map((s) => ms(s.startAt)))).toBe(
+      ms("2027-08-09T16:30:00-07:00")
+    );
+  });
+
+  it("only girls who do the add-on remain: french tip forces Cassie", () => {
+    const any = computeSlots(mkData(), [], {
+      serviceVariationId: "svc-mani",
+      addonIds: ["svc-french"],
+      ...MON,
+    });
+    expect(any.length).toBeGreaterThan(0);
+    expect(new Set(any.map((s) => s.teamMemberId))).toEqual(
+      new Set(["staff-cassie"])
+    );
+    const vero = computeSlots(mkData(), [], {
+      serviceVariationId: "svc-mani",
+      teamMemberId: "staff-vero",
+      addonIds: ["svc-french"],
+      ...MON,
+    });
+    expect(vero).toEqual([]);
+  });
+
+  it("rejects an add-on that doesn't pair with the service", () => {
+    const slots = computeSlots(mkData(), [], {
+      serviceVariationId: "svc-mani",
+      addonIds: ["svc-gold"],
+      ...MON,
+    });
+    expect(slots).toEqual([]);
+  });
+
+  it("never offers an add-on as a standalone booking", () => {
+    const slots = computeSlots(mkData(), [], {
+      serviceVariationId: "svc-gold",
+      ...MON,
+    });
+    expect(slots).toEqual([]);
   });
 
   it("respects the requested window bounds", () => {

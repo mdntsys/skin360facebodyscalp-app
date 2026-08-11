@@ -30,6 +30,11 @@ export interface Service {
   durationMin: number;
   bufferMin: number; // wind-down/cleanup minutes appended after the service
   description: string;
+  /**
+   * When set, this service is an add-on: never bookable alone online, only
+   * offered after a main service whose category appears in this list.
+   */
+  addonFor?: string[] | null;
 }
 
 export type EmploymentType = "owner" | "admin" | "employee" | "contractor-1099";
