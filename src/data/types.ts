@@ -35,6 +35,8 @@ export interface Service {
    * offered after a main service whose category appears in this list.
    */
   addonFor?: string[] | null;
+  /** False for retired services kept for history. Absent = active. */
+  active?: boolean;
 }
 
 export type EmploymentType = "owner" | "admin" | "employee" | "contractor-1099";
@@ -190,6 +192,10 @@ export interface ClientPackage {
   packageId: string;
   purchasedISO: string;
   sessionsUsed: number;
+  /** The one treatment this package is for (10 x the same treatment). */
+  serviceId?: string;
+  sessionsTotal: number;
+  pricePaid: number;
 }
 
 export type ExpenseCategory =
@@ -213,7 +219,14 @@ export interface Expense {
   receiptName?: string;
 }
 
-export type PaymentMethod = "Card" | "Cash" | "Gift Card" | "Membership Credit";
+export type PaymentMethod =
+  | "GoDaddy Terminal"
+  | "Square Terminal"
+  | "Card"
+  | "Cash"
+  | "Gift Card"
+  | "Membership Credit"
+  | "None";
 
 export interface Payment {
   id: string;
@@ -227,6 +240,12 @@ export interface Payment {
   total: number;
   locationId: LocationId;
   kind: "service" | "retail" | "package" | "membership";
+  /** Who performed the work — drives the daily per-girl close-out report. */
+  staffId?: string;
+  appointmentId?: string;
+  serviceId?: string;
+  /** Set when a package session covered this visit. */
+  clientPackageId?: string;
 }
 
 export interface IntakeForm {

@@ -59,7 +59,7 @@ export function Topbar() {
   }
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b border-line bg-ivory/90 px-4 backdrop-blur-sm sm:px-6">
+    <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b border-line bg-ivory/90 px-4 backdrop-blur-sm sm:px-6 print:hidden">
       {/* Mobile nav drawer */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetTrigger asChild>

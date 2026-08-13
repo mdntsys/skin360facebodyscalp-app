@@ -63,6 +63,7 @@ import type {
   Member,
   MembershipPlan,
   Payment,
+  PaymentMethod,
   Product,
   Room,
   Service,
@@ -175,6 +176,33 @@ export interface NewExpenseInput {
   receiptName?: string;
 }
 
+export interface CheckoutInput {
+  clientId: string;
+  staffId: string;
+  serviceId: string;
+  locationId: LocationId;
+  subtotal: number;
+  tip: number;
+  method: PaymentMethod;
+  /** The business day the money belongs to (defaults to now). */
+  dateISO?: string;
+  /** Existing appointment being closed out; omit for a walk-in quick sale. */
+  appointmentId?: string;
+  /** Redeem one session from this package (pair with subtotal 0). */
+  clientPackageId?: string;
+  description?: string;
+}
+
+export interface SellPackageInput {
+  clientId: string;
+  /** The one treatment the series is for. */
+  serviceId: string;
+  /** The ServicePackage template supplying sessions + discount. */
+  packageId: string;
+  locationId: LocationId;
+  method: PaymentMethod;
+}
+
 interface Collections {
   locations: ClinicLocation[];
   services: Service[];
@@ -252,6 +280,8 @@ export interface DataContextValue extends Collections {
     input: { bufferMin?: number; price?: number; durationMin?: number }
   ) => Promise<void>;
   updateAppSettings: (input: Partial<AppSettings>) => Promise<void>;
+  recordCheckout: (input: CheckoutInput) => Promise<Payment>;
+  sellPackage: (input: SellPackageInput) => Promise<ClientPackage>;
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -289,6 +319,10 @@ function byStart(a: Appointment, b: Appointment) {
 
 function bySort(a: Room, b: Room) {
   return a.sort - b.sort;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 /** Date-only strings ("2026-07-14") are interpreted in local time. */
@@ -916,6 +950,123 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [supabase]
   );
 
+  /**
+   * Close out one client visit through the record_checkout RPC — a single
+   * Postgres transaction that completes the appointment with the price that
+   * was actually charged (and the girl who actually performed it), burns a
+   * package session when one covers the visit (atomically, guarded against
+   * stale clients), and records the money row that drives the daily per-girl
+   * report. Walk-ins get a completed appointment created in the same
+   * transaction so visit counts and revenue stay truthful, and a retry after
+   * any failure can never duplicate money or sessions.
+   */
+  const recordCheckout = React.useCallback(
+    async (input: CheckoutInput) => {
+      const service = data.services.find((s) => s.id === input.serviceId);
+      const { data: result, error } = await supabase.rpc("record_checkout", {
+        p_client_id: input.clientId,
+        p_staff_id: input.staffId,
+        p_service_id: input.serviceId,
+        p_location_id: input.locationId,
+        p_date: input.dateISO ?? new Date().toISOString(),
+        p_subtotal: round2(Math.max(0, input.subtotal)),
+        p_tip: round2(Math.max(0, input.tip)),
+        p_method: input.method,
+        p_description: input.description ?? service?.name ?? "Service checkout",
+        p_appointment_id: input.appointmentId ?? null,
+        p_client_package_id: input.clientPackageId ?? null,
+        p_duration_min: service?.durationMin ?? 30,
+      });
+      if (error) {
+        if (error.message.includes("CHECKOUT_DUPLICATE")) {
+          throw new Error("This visit is already checked out.");
+        }
+        if (error.message.includes("CHECKOUT_PACKAGE")) {
+          throw new Error(
+            "That package has no sessions left — it may have been used from another device."
+          );
+        }
+        throw new Error(error.message);
+      }
+      const out = result as {
+        appointment: AppointmentRow;
+        payment: PaymentRow;
+        clientPackage: ClientPackageRow | null;
+      };
+      const appointment = mapAppointment(out.appointment);
+      const payment = mapPayment(out.payment);
+      const redeemed = out.clientPackage
+        ? mapClientPackage(out.clientPackage)
+        : null;
+
+      setData((prev) => ({
+        ...prev,
+        appointments: input.appointmentId
+          ? prev.appointments.map((a) =>
+              a.id === appointment.id ? appointment : a
+            )
+          : [...prev.appointments, appointment].sort(byStart),
+        payments: [payment, ...prev.payments],
+        clientPackages: redeemed
+          ? prev.clientPackages.map((p) =>
+              p.id === redeemed.id ? redeemed : p
+            )
+          : prev.clientPackages,
+      }));
+      return payment;
+    },
+    [supabase, data.services]
+  );
+
+  /**
+   * Sell a series to a client via the sell_client_package RPC — one Postgres
+   * transaction writing the client package plus its kind "package" payment
+   * (which DOES count toward revenue — sessions are then redeemed for free at
+   * checkout). 10 x the SAME treatment per Carolina, priced from that
+   * treatment with the template's discount, paid up front.
+   */
+  const sellPackage = React.useCallback(
+    async (input: SellPackageInput) => {
+      const template = data.servicePackages.find(
+        (p) => p.id === input.packageId
+      );
+      const service = data.services.find((s) => s.id === input.serviceId);
+      if (!template || !service)
+        throw new Error("Unknown package or treatment.");
+      const fullPrice = round2(template.sessions * service.price);
+      const price = round2(fullPrice * (1 - template.discountPct / 100));
+
+      const { data: result, error } = await supabase.rpc(
+        "sell_client_package",
+        {
+          p_client_id: input.clientId,
+          p_package_id: template.id,
+          p_service_id: service.id,
+          p_location_id: input.locationId,
+          p_method: input.method,
+          p_sessions: template.sessions,
+          p_price: price,
+          p_description: `${template.name} — ${service.name}`,
+        }
+      );
+      if (error) throw new Error(error.message);
+      const out = result as {
+        clientPackage: ClientPackageRow;
+        payment: PaymentRow;
+      };
+      const created = mapClientPackage(out.clientPackage);
+      const payment = mapPayment(out.payment);
+
+      setData((prev) => ({
+        ...prev,
+        clientPackages: [...prev.clientPackages, created],
+        payments: [payment, ...prev.payments],
+      }));
+      return created;
+    },
+    [supabase, data.servicePackages, data.services]
+  );
+
   const value = React.useMemo<DataContextValue>(() => {
     const completedByClient = new Map<string, Appointment[]>();
     for (const a of data.appointments) {
@@ -1010,6 +1161,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       updateStaff,
       updateService,
       updateAppSettings,
+      recordCheckout,
+      sellPackage,
     };
   }, [
     data,
@@ -1038,6 +1191,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     updateStaff,
     updateService,
     updateAppSettings,
+    recordCheckout,
+    sellPackage,
   ]);
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

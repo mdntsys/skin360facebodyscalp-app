@@ -214,7 +214,8 @@ const salesChartConfig = {
 function SalesReport() {
   const { appointments, payments, clientName } = useData();
 
-  const gross = round2(payments.reduce((s, p) => s + p.total, 0));
+  // Tips belong to the girls, not the salon — keep them out of gross.
+  const gross = round2(payments.reduce((s, p) => s + p.total - p.tip, 0));
   const taxTotal = round2(payments.reduce((s, p) => s + p.tax, 0));
   const tips = round2(payments.reduce((s, p) => s + p.tip, 0));
   const net = round2(gross - taxTotal);
@@ -995,10 +996,14 @@ const txnChartConfig = {
 } satisfies ChartConfig;
 
 const methodKey: Record<PaymentMethod, "card" | "cash" | "gift" | "credit"> = {
+  "GoDaddy Terminal": "card",
+  "Square Terminal": "card",
   Card: "card",
   Cash: "cash",
   "Gift Card": "gift",
   "Membership Credit": "credit",
+  // "None" rows are $0 package-session redemptions — bucket is inert.
+  None: "credit",
 };
 
 function TransactionDetailReport() {
@@ -1057,7 +1062,9 @@ function TransactionDetailReport() {
     }
   }
 
-  const cardCount = payments.filter((p) => p.method === "Card").length;
+  const cardCount = payments.filter(
+    (p) => methodKey[p.method] === "card"
+  ).length;
   const cashCount = payments.filter((p) => p.method === "Cash").length;
   const cardPct = payments.length
     ? Math.round((cardCount / payments.length) * 100)

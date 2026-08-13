@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import { format } from "date-fns";
-import { Plus, Sparkles } from "lucide-react";
+import { HandCoins, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
-import { formatCurrency, useData } from "@/data";
+import { formatCurrency, useData, type ServicePackage } from "@/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -16,6 +16,7 @@ import {
   CreatePackageDialog,
   type PackageFormValues,
 } from "./_components/create-package-dialog";
+import { SellPackageDialog } from "./_components/sell-package-dialog";
 
 export default function PackagesPage() {
   const {
@@ -27,6 +28,7 @@ export default function PackagesPage() {
     createServicePackage,
   } = useData();
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [selling, setSelling] = React.useState<ServicePackage | null>(null);
 
   function clientInitials(clientId: string): string {
     const client = clientById.get(clientId);
@@ -118,6 +120,15 @@ export default function PackagesPage() {
                   <p className="mt-1 text-xs font-light text-muted-warm">
                     per session ≈ {formatCurrency(Math.round(pkg.price / pkg.sessions))}
                   </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-3 w-full"
+                    onClick={() => setSelling(pkg)}
+                  >
+                    <HandCoins data-icon="inline-start" strokeWidth={1.75} />
+                    Sell to Client
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -144,7 +155,7 @@ export default function PackagesPage() {
                 {clientPackages.map((cp) => {
                   const client = clientById.get(cp.clientId);
                   const pkg = packageById.get(cp.packageId);
-                  const total = pkg?.sessions ?? 0;
+                  const total = cp.sessionsTotal || (pkg?.sessions ?? 0);
                   const used = Math.min(cp.sessionsUsed, total);
                   const remaining = Math.max(0, total - used);
                   const pct = total > 0 ? (used / total) * 100 : 0;
@@ -174,7 +185,9 @@ export default function PackagesPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm text-ink-soft">
-                          {pkg?.name ?? "Unknown package"}
+                          {cp.serviceId
+                            ? `${pkg?.name ?? "Series"} — ${serviceById.get(cp.serviceId)?.name ?? cp.serviceId}`
+                            : (pkg?.name ?? "Unknown package")}
                         </p>
                         <div className="mt-1.5 flex items-center gap-3">
                           <Progress
@@ -213,6 +226,13 @@ export default function PackagesPage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onSubmit={handleCreate}
+      />
+      <SellPackageDialog
+        open={selling !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelling(null);
+        }}
+        offering={selling}
       />
     </>
   );

@@ -5,6 +5,7 @@ import type { Appointment, LocationId, Payment } from "./types";
 export * from "./types";
 export { DataProvider, useData } from "./provider";
 export type {
+  CheckoutInput,
   DataContextValue,
   NewAppointmentInput,
   NewAvailabilityRule,
@@ -17,6 +18,7 @@ export type {
   Profile,
   ProductInput,
   RoomInput,
+  SellPackageInput,
 } from "./provider";
 
 export type LocationFilter = LocationId | "all";

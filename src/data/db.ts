@@ -80,6 +80,7 @@ export function mapService(r: ServiceRow): Service {
     durationMin: r.duration_min,
     bufferMin: Number(r.buffer_min ?? 0),
     description: r.description,
+    active: r.active,
   };
 }
 
@@ -372,6 +373,9 @@ export interface ClientPackageRow {
   package_id: string;
   purchased_at: string;
   sessions_used: number;
+  service_id: string | null;
+  sessions_total: number;
+  price_paid: number | string;
 }
 
 export function mapClientPackage(r: ClientPackageRow): ClientPackage {
@@ -381,6 +385,9 @@ export function mapClientPackage(r: ClientPackageRow): ClientPackage {
     packageId: r.package_id,
     purchasedISO: r.purchased_at,
     sessionsUsed: r.sessions_used,
+    serviceId: r.service_id ?? undefined,
+    sessionsTotal: r.sessions_total,
+    pricePaid: Number(r.price_paid),
   };
 }
 
@@ -422,6 +429,10 @@ export interface PaymentRow {
   total: number | string;
   location_id: string;
   kind: string;
+  staff_id: string | null;
+  appointment_id: string | null;
+  service_id: string | null;
+  client_package_id: string | null;
 }
 
 export function mapPayment(r: PaymentRow): Payment {
@@ -437,6 +448,10 @@ export function mapPayment(r: PaymentRow): Payment {
     total: Number(r.total),
     locationId: r.location_id as LocationId,
     kind: r.kind as Payment["kind"],
+    staffId: r.staff_id ?? undefined,
+    appointmentId: r.appointment_id ?? undefined,
+    serviceId: r.service_id ?? undefined,
+    clientPackageId: r.client_package_id ?? undefined,
   };
 }
 
