@@ -11,6 +11,7 @@ export type {
   NewAvailabilityRule,
   NewClientInput,
   NewExpenseInput,
+  NewFormSubmissionInput,
   NewOverrideInput,
   NewPackageInput,
   NewPlanInput,

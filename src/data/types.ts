@@ -255,6 +255,64 @@ export interface IntakeForm {
   uploadedISO: string;
   fileType: "PDF" | "JPG";
   sizeKB: number;
+  /** Supabase Storage path; legacy rows without one have no real file. */
+  filePath?: string;
+}
+
+// --- Digital intake/consent forms (replicated from Carolina's GoFormz) ------
+
+export type FormFieldType =
+  | "text"
+  | "date"
+  | "textarea"
+  | "radio"
+  | "checkboxes"
+  | "yesno"
+  | "yesno_detail"
+  | "note" // display-only fine print
+  | "statement"; // display-only consent/ack paragraph
+
+export interface FormField {
+  key: string;
+  type: FormFieldType;
+  label?: string;
+  /** Body text for note/statement fields. */
+  text?: string;
+  options?: string[];
+  required?: boolean;
+  /** Render at half width in the two-column grid. */
+  half?: boolean;
+}
+
+export interface FormSection {
+  title?: string;
+  fields: FormField[];
+}
+
+export type FormCategory = "intake" | "consent" | "release";
+
+export interface FormTemplate {
+  id: string;
+  name: string;
+  category: FormCategory;
+  description: string;
+  schema: { sections: FormSection[] };
+  sort: number;
+  active: boolean;
+}
+
+/**
+ * Answer shapes by field type: text/date/textarea/radio -> string,
+ * checkboxes -> string[], yesno -> "Yes" | "No",
+ * yesno_detail -> { answer: "Yes" | "No" | ""; detail: string }.
+ */
+export interface FormSubmission {
+  id: string;
+  templateId: string;
+  clientId: string;
+  data: Record<string, unknown>;
+  signatureDataUrl: string | null;
+  signedISO: string;
 }
 
 export interface ClientNote {

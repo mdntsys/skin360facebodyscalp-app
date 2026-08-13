@@ -11,6 +11,9 @@ import type {
   ClinicLocation,
   Expense,
   ExpenseCategory,
+  FormCategory,
+  FormSubmission,
+  FormTemplate,
   IntakeForm,
   LocationId,
   Member,
@@ -462,6 +465,7 @@ export interface IntakeFormRow {
   uploaded_at: string;
   file_type: string;
   size_kb: number;
+  file_path: string | null;
 }
 
 export function mapIntakeForm(r: IntakeFormRow): IntakeForm {
@@ -472,6 +476,49 @@ export function mapIntakeForm(r: IntakeFormRow): IntakeForm {
     uploadedISO: r.uploaded_at,
     fileType: r.file_type as IntakeForm["fileType"],
     sizeKB: r.size_kb,
+    filePath: r.file_path ?? undefined,
+  };
+}
+
+export interface FormTemplateRow {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  schema: FormTemplate["schema"];
+  sort: number;
+  active: boolean;
+}
+
+export function mapFormTemplate(r: FormTemplateRow): FormTemplate {
+  return {
+    id: r.id,
+    name: r.name,
+    category: r.category as FormCategory,
+    description: r.description,
+    schema: r.schema,
+    sort: r.sort,
+    active: r.active,
+  };
+}
+
+export interface FormSubmissionRow {
+  id: string;
+  template_id: string;
+  client_id: string;
+  data: Record<string, unknown>;
+  signature_data_url: string | null;
+  signed_at: string;
+}
+
+export function mapFormSubmission(r: FormSubmissionRow): FormSubmission {
+  return {
+    id: r.id,
+    templateId: r.template_id,
+    clientId: r.client_id,
+    data: r.data ?? {},
+    signatureDataUrl: r.signature_data_url,
+    signedISO: r.signed_at,
   };
 }
 

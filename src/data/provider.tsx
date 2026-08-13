@@ -13,6 +13,8 @@ import {
   mapClientNote,
   mapClientPackage,
   mapExpense,
+  mapFormSubmission,
+  mapFormTemplate,
   mapIntakeForm,
   mapLocation,
   mapMember,
@@ -32,6 +34,8 @@ import {
   type ClientPackageRow,
   type ClientRow,
   type ExpenseRow,
+  type FormSubmissionRow,
+  type FormTemplateRow,
   type IntakeFormRow,
   type LocationRow,
   type MemberRow,
@@ -58,6 +62,8 @@ import type {
   EmploymentType,
   Expense,
   ExpenseCategory,
+  FormSubmission,
+  FormTemplate,
   IntakeForm,
   LocationId,
   Member,
@@ -176,6 +182,13 @@ export interface NewExpenseInput {
   receiptName?: string;
 }
 
+export interface NewFormSubmissionInput {
+  templateId: string;
+  clientId: string;
+  data: Record<string, unknown>;
+  signatureDataUrl: string | null;
+}
+
 export interface CheckoutInput {
   clientId: string;
   staffId: string;
@@ -217,6 +230,8 @@ interface Collections {
   expenses: Expense[];
   payments: Payment[];
   intakeForms: IntakeForm[];
+  formTemplates: FormTemplate[];
+  formSubmissions: FormSubmission[];
   clientNotes: ClientNote[];
   rooms: Room[];
   availabilityRules: AvailabilityRule[];
@@ -282,6 +297,11 @@ export interface DataContextValue extends Collections {
   updateAppSettings: (input: Partial<AppSettings>) => Promise<void>;
   recordCheckout: (input: CheckoutInput) => Promise<Payment>;
   sellPackage: (input: SellPackageInput) => Promise<ClientPackage>;
+  submitForm: (input: NewFormSubmissionInput) => Promise<FormSubmission>;
+  /** Upload a signed-form scan/photo to storage + record it on the client. */
+  uploadIntakeFile: (clientId: string, file: File) => Promise<IntakeForm>;
+  /** Short-lived signed URL for a stored intake file. */
+  intakeFileUrl: (filePath: string) => Promise<string>;
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -303,6 +323,8 @@ const EMPTY: Collections = {
   expenses: [],
   payments: [],
   intakeForms: [],
+  formTemplates: [],
+  formSubmissions: [],
   clientNotes: [],
   rooms: [],
   availabilityRules: [],
@@ -343,7 +365,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setStatus("loading");
     setErrorMessage(null);
     try {
-      const [loc, svc, stf, cli, appt, prod, plan, mem, pkg, cpkg, exp, pay, forms, notes, rms, rules, ovr, blocks, settings] =
+      const [loc, svc, stf, cli, appt, prod, plan, mem, pkg, cpkg, exp, pay, forms, ftpl, fsub, notes, rms, rules, ovr, blocks, settings] =
         await Promise.all([
           supabase.from("locations").select("*").order("id"),
           supabase.from("services").select("*").order("name"),
@@ -358,6 +380,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           supabase.from("expenses").select("*").order("date", { ascending: false }),
           supabase.from("payments").select("*").order("date", { ascending: false }),
           supabase.from("intake_forms").select("*").order("uploaded_at", { ascending: false }),
+          supabase.from("form_templates").select("*").order("sort"),
+          supabase.from("form_submissions").select("*").order("signed_at", { ascending: false }),
           supabase.from("client_notes").select("*").order("date", { ascending: false }),
           supabase.from("rooms").select("*").order("sort"),
           supabase.from("availability_rules").select("*"),
@@ -366,7 +390,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           supabase.from("app_settings").select("*"),
         ]);
 
-      const failed = [loc, svc, stf, cli, appt, prod, plan, mem, pkg, cpkg, exp, pay, forms, notes, rms, rules, ovr, blocks, settings].find(
+      const failed = [loc, svc, stf, cli, appt, prod, plan, mem, pkg, cpkg, exp, pay, forms, ftpl, fsub, notes, rms, rules, ovr, blocks, settings].find(
         (r) => r.error
       );
       if (failed?.error) throw new Error(failed.error.message);
@@ -385,6 +409,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         expenses: ((exp.data ?? []) as ExpenseRow[]).map(mapExpense),
         payments: ((pay.data ?? []) as PaymentRow[]).map(mapPayment),
         intakeForms: ((forms.data ?? []) as IntakeFormRow[]).map(mapIntakeForm),
+        formTemplates: ((ftpl.data ?? []) as FormTemplateRow[]).map(mapFormTemplate),
+        formSubmissions: ((fsub.data ?? []) as FormSubmissionRow[]).map(mapFormSubmission),
         clientNotes: ((notes.data ?? []) as ClientNoteRow[]).map(mapClientNote),
         rooms: ((rms.data ?? []) as RoomRow[]).map(mapRoom),
         availabilityRules: ((rules.data ?? []) as AvailabilityRuleRow[]).map(mapAvailabilityRule),
@@ -1067,6 +1093,74 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [supabase, data.servicePackages, data.services]
   );
 
+  const submitForm = React.useCallback(
+    async (input: NewFormSubmissionInput) => {
+      const { data: row, error } = await supabase
+        .from("form_submissions")
+        .insert({
+          template_id: input.templateId,
+          client_id: input.clientId,
+          data: input.data,
+          signature_data_url: input.signatureDataUrl,
+        })
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      const created = mapFormSubmission(row as FormSubmissionRow);
+      setData((prev) => ({
+        ...prev,
+        formSubmissions: [created, ...prev.formSubmissions],
+      }));
+      return created;
+    },
+    [supabase]
+  );
+
+  const uploadIntakeFile = React.useCallback(
+    async (clientId: string, file: File) => {
+      const isPdf =
+        file.type === "application/pdf" ||
+        file.name.toLowerCase().endsWith(".pdf");
+      const safeName = file.name.replace(/[^\w.\- ]+/g, "_");
+      const path = `${clientId}/${Date.now()}-${safeName}`;
+      const { error: uploadError } = await supabase.storage
+        .from("client-files")
+        .upload(path, file, { contentType: file.type || undefined });
+      if (uploadError) throw new Error(uploadError.message);
+
+      const { data: row, error } = await supabase
+        .from("intake_forms")
+        .insert({
+          client_id: clientId,
+          name: file.name,
+          file_type: isPdf ? "PDF" : "JPG",
+          size_kb: Math.max(1, Math.round(file.size / 1024)),
+          file_path: path,
+        })
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      const created = mapIntakeForm(row as IntakeFormRow);
+      setData((prev) => ({
+        ...prev,
+        intakeForms: [created, ...prev.intakeForms],
+      }));
+      return created;
+    },
+    [supabase]
+  );
+
+  const intakeFileUrl = React.useCallback(
+    async (filePath: string) => {
+      const { data: signed, error } = await supabase.storage
+        .from("client-files")
+        .createSignedUrl(filePath, 60 * 60);
+      if (error) throw new Error(error.message);
+      return signed.signedUrl;
+    },
+    [supabase]
+  );
+
   const value = React.useMemo<DataContextValue>(() => {
     const completedByClient = new Map<string, Appointment[]>();
     for (const a of data.appointments) {
@@ -1163,6 +1257,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       updateAppSettings,
       recordCheckout,
       sellPackage,
+      submitForm,
+      uploadIntakeFile,
+      intakeFileUrl,
     };
   }, [
     data,
@@ -1193,6 +1290,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     updateAppSettings,
     recordCheckout,
     sellPackage,
+    submitForm,
+    uploadIntakeFile,
+    intakeFileUrl,
   ]);
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
