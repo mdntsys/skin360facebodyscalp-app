@@ -1,15 +1,18 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-/** Customer-facing booking + gift card surface — no session required. */
+/** Customer-facing surface (booking, gift cards, send-ahead forms) — no
+ *  session required. /api/forms/send stays behind auth on purpose. */
 function isPublicBookingPath(path: string): boolean {
   return (
     path === "/book" ||
     path.startsWith("/book/") ||
     path === "/gift-cards" ||
     path.startsWith("/gift-cards/") ||
+    path.startsWith("/f/") ||
     path.startsWith("/api/booking/") ||
-    path.startsWith("/api/gift-cards/")
+    path.startsWith("/api/gift-cards/") ||
+    path === "/api/forms/submit"
   );
 }
 

@@ -1,6 +1,7 @@
-// Carolina's six GoFormz templates, replicated as five app forms (the two
-// facial templates merged — "Skin360 Facial Forms" v.3 is the newer superset
-// of "Facial Intake and Consent Forms" v.2; flagged for her sign-off).
+// Carolina's six GoFormz templates, replicated as five app forms. The two
+// facial templates resolved to the SHORT one ("Facial Intake and Consent
+// Forms" v.2) — Carolina confirmed 2026-08-14 the long v.3 is old and only
+// survived because GoFormz wouldn't let her delete it.
 // Source transcriptions: docs/forms/*.md (captured 2026-08-13).
 // This file is the single source of truth: the DB seed migration is generated
 // from it, and the vitest suite validates its structure.
@@ -48,14 +49,9 @@ export const FORM_SEEDS: FormTemplate[] = [
               type: "checkboxes",
               label: "Do you have any of the following conditions? If yes, please select them:",
               options: [
-                "Acne", "Autoimmune disorders", "Asthma", "Cold sores, fever blisters",
-                "COPD", "Cancer", "Diabetes", "Dermatitis", "Eczema", "Epilepsy",
-                "Glaucoma", "Heart disease", "Hepatitis", "Herpes simplex",
-                "High/low blood pressure", "Hives", "Hemophilia", "HIV/AIDS",
-                "Hyper/hypo pigmentation", "Hysterectomy", "Keloid, hypertrophic scars",
-                "Lupus", "Migraines", "Phlebitis/blood clots", "Psoriasis", "Rosacea",
-                "Skin infections", "Seborrhea", "Thyroid condition", "Tinea",
-                "Varicose veins", "Warts",
+                "Acne", "Asthma", "Cancer", "Cold sores, fever blisters", "COPD",
+                "Dermatitis", "Diabetes", "Eczema", "Epilepsy", "HIV/AIDS",
+                "Hives", "Psoriasis", "Rosacea", "Skin infections",
               ],
             },
             { key: "other_condition", type: "text", label: "Any other condition" },
@@ -92,32 +88,14 @@ export const FORM_SEEDS: FormTemplate[] = [
               type: "checkboxes",
               label: "Check all that apply:",
               options: [
-                "Acne", "Age spots", "Blackheads", "Broken capillaries", "Dark circles",
-                "Dehydrated skin", "Dry skin", "Dull skin", "Eczema", "Enlarged pores",
-                "Facial hair", "Fine lines and wrinkles", "Hyperpigmentation",
-                "Ingrown hairs", "Keratosis pilaris", "Melasma", "Milia", "Oily skin",
-                "Premature aging", "Psoriasis", "Razor burn", "Rosacea", "Scars",
-                "Skin redness", "Sun damage", "Thin skin", "Under-eye puffiness",
-                "Uneven skin texture", "Uneven skin tone", "Whiteheads",
+                "Acne", "Age spots", "Blackheads", "Dehydrated skin", "Dry skin",
+                "Dull skin", "Facial hair", "Fine lines and wrinkles",
+                "Hyperpigmentation", "Ingrown hairs", "Enlarged pores", "Oily skin",
+                "Eczema", "Rosacea", "Scars", "Melasma", "Dark circles",
+                "Under-eye puffiness",
               ],
             },
             { key: "other_concern", type: "text", label: "Any other" },
-          ],
-        },
-        {
-          title: "Your Skin Type",
-          fields: [
-            {
-              key: "skin_type",
-              type: "checkboxes",
-              label: "Check all that apply:",
-              options: [
-                "Normal skin", "Dry skin", "Oily skin", "Combination skin",
-                "Acne-prone skin", "Sensitive skin", "Aging skin", "Dehydrated skin",
-                "Hyperpigmented skin", "Sun-damaged skin", "Rosacea-prone skin",
-                "Psoriasis-prone skin",
-              ],
-            },
           ],
         },
         {
@@ -148,17 +126,6 @@ export const FORM_SEEDS: FormTemplate[] = [
         {
           title: "Your Skin History",
           fields: [
-            {
-              key: "reaction_history",
-              type: "checkboxes",
-              label: "Have you ever had an allergic reaction to any of the following?",
-              options: [
-                "Alpha hydroxy acids", "Animals", "Aspirin", "Cosmetics",
-                "Essential oils", "Food", "Fragrance", "Iodine", "Latex", "Medication",
-                "Nuts", "Pollen", "Skin products", "Shellfish", "Sunscreen", "Other",
-              ],
-            },
-            { key: "reaction_explain", type: "text", label: "If you checked any above, please explain" },
             { key: "previous_treatments", type: "text", label: "Any history of previous facials, microdermabrasion, peels or other treatments?" },
             { key: "skin_heal", type: "radio", label: "How does your skin heal?", options: ["Fast", "Slow", "Scars", "Pigments"] },
             { key: "bruises", type: "yesno", label: "Do you get bruises easily?" },

@@ -13,6 +13,7 @@ import {
   mapClientNote,
   mapClientPackage,
   mapExpense,
+  mapFormRequest,
   mapFormSubmission,
   mapFormTemplate,
   mapIntakeForm,
@@ -34,6 +35,7 @@ import {
   type ClientPackageRow,
   type ClientRow,
   type ExpenseRow,
+  type FormRequestRow,
   type FormSubmissionRow,
   type FormTemplateRow,
   type IntakeFormRow,
@@ -62,6 +64,7 @@ import type {
   EmploymentType,
   Expense,
   ExpenseCategory,
+  FormRequest,
   FormSubmission,
   FormTemplate,
   IntakeForm,
@@ -232,6 +235,7 @@ interface Collections {
   intakeForms: IntakeForm[];
   formTemplates: FormTemplate[];
   formSubmissions: FormSubmission[];
+  formRequests: FormRequest[];
   clientNotes: ClientNote[];
   rooms: Room[];
   availabilityRules: AvailabilityRule[];
@@ -298,6 +302,20 @@ export interface DataContextValue extends Collections {
   recordCheckout: (input: CheckoutInput) => Promise<Payment>;
   sellPackage: (input: SellPackageInput) => Promise<ClientPackage>;
   submitForm: (input: NewFormSubmissionInput) => Promise<FormSubmission>;
+  /**
+   * Lightweight refetch of forms data only — send-ahead submissions happen
+   * outside this session, so forms surfaces call this on mount to catch up.
+   */
+  refreshForms: () => Promise<void>;
+  /**
+   * Create a send-ahead form link; deliver "email" also emails it to the
+   * client. Returns the link either way so the desk can text it by hand.
+   */
+  sendFormRequest: (
+    clientId: string,
+    templateId: string,
+    deliver: "email" | "link"
+  ) => Promise<{ request: FormRequest; link: string; emailed: boolean }>;
   /** Upload a signed-form scan/photo to storage + record it on the client. */
   uploadIntakeFile: (clientId: string, file: File) => Promise<IntakeForm>;
   /** Short-lived signed URL for a stored intake file. */
@@ -325,6 +343,7 @@ const EMPTY: Collections = {
   intakeForms: [],
   formTemplates: [],
   formSubmissions: [],
+  formRequests: [],
   clientNotes: [],
   rooms: [],
   availabilityRules: [],
@@ -365,7 +384,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setStatus("loading");
     setErrorMessage(null);
     try {
-      const [loc, svc, stf, cli, appt, prod, plan, mem, pkg, cpkg, exp, pay, forms, ftpl, fsub, notes, rms, rules, ovr, blocks, settings] =
+      const [loc, svc, stf, cli, appt, prod, plan, mem, pkg, cpkg, exp, pay, forms, ftpl, fsub, freq, notes, rms, rules, ovr, blocks, settings] =
         await Promise.all([
           supabase.from("locations").select("*").order("id"),
           supabase.from("services").select("*").order("name"),
@@ -382,6 +401,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           supabase.from("intake_forms").select("*").order("uploaded_at", { ascending: false }),
           supabase.from("form_templates").select("*").order("sort"),
           supabase.from("form_submissions").select("*").order("signed_at", { ascending: false }),
+          supabase.from("form_requests").select("*").order("created_at", { ascending: false }),
           supabase.from("client_notes").select("*").order("date", { ascending: false }),
           supabase.from("rooms").select("*").order("sort"),
           supabase.from("availability_rules").select("*"),
@@ -390,7 +410,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           supabase.from("app_settings").select("*"),
         ]);
 
-      const failed = [loc, svc, stf, cli, appt, prod, plan, mem, pkg, cpkg, exp, pay, forms, ftpl, fsub, notes, rms, rules, ovr, blocks, settings].find(
+      const failed = [loc, svc, stf, cli, appt, prod, plan, mem, pkg, cpkg, exp, pay, forms, ftpl, fsub, freq, notes, rms, rules, ovr, blocks, settings].find(
         (r) => r.error
       );
       if (failed?.error) throw new Error(failed.error.message);
@@ -411,6 +431,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         intakeForms: ((forms.data ?? []) as IntakeFormRow[]).map(mapIntakeForm),
         formTemplates: ((ftpl.data ?? []) as FormTemplateRow[]).map(mapFormTemplate),
         formSubmissions: ((fsub.data ?? []) as FormSubmissionRow[]).map(mapFormSubmission),
+        formRequests: ((freq.data ?? []) as FormRequestRow[]).map(mapFormRequest),
         clientNotes: ((notes.data ?? []) as ClientNoteRow[]).map(mapClientNote),
         rooms: ((rms.data ?? []) as RoomRow[]).map(mapRoom),
         availabilityRules: ((rules.data ?? []) as AvailabilityRuleRow[]).map(mapAvailabilityRule),
@@ -1150,6 +1171,67 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [supabase]
   );
 
+  const refreshForms = React.useCallback(async () => {
+    const [fsub, freq, files] = await Promise.all([
+      supabase.from("form_submissions").select("*").order("signed_at", { ascending: false }),
+      supabase.from("form_requests").select("*").order("created_at", { ascending: false }),
+      supabase.from("intake_forms").select("*").order("uploaded_at", { ascending: false }),
+    ]);
+    if (fsub.error || freq.error || files.error) return; // best-effort refresh
+    setData((prev) => ({
+      ...prev,
+      formSubmissions: ((fsub.data ?? []) as FormSubmissionRow[]).map(mapFormSubmission),
+      formRequests: ((freq.data ?? []) as FormRequestRow[]).map(mapFormRequest),
+      intakeForms: ((files.data ?? []) as IntakeFormRow[]).map(mapIntakeForm),
+    }));
+  }, [supabase]);
+
+  const sendFormRequest = React.useCallback(
+    async (
+      clientId: string,
+      templateId: string,
+      deliver: "email" | "link"
+    ) => {
+      const res = await fetch("/api/forms/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, templateId, deliver }),
+      });
+      let payload: {
+        error?: string;
+        request?: FormRequestRow;
+        link?: string;
+        emailed?: boolean;
+      };
+      try {
+        payload = await res.json();
+      } catch {
+        // A signed-out session gets the login page's HTML back.
+        throw new Error(
+          res.status === 401 || res.redirected
+            ? "Your session expired — refresh the page and sign in again."
+            : "Couldn't create the form link. Please try again."
+        );
+      }
+      // A failed email still created the link — keep local state honest.
+      if (payload.request) {
+        const created = mapFormRequest(payload.request);
+        setData((prev) => ({
+          ...prev,
+          formRequests: [created, ...prev.formRequests],
+        }));
+        if (!res.ok) throw new Error(payload.error ?? "The email didn't send.");
+        return {
+          request: created,
+          link: payload.link ?? "",
+          emailed: payload.emailed ?? false,
+        };
+      }
+      throw new Error(payload.error ?? "Couldn't create the form link.");
+    },
+    [supabase]
+  );
+
   const intakeFileUrl = React.useCallback(
     async (filePath: string) => {
       const { data: signed, error } = await supabase.storage
@@ -1258,6 +1340,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       recordCheckout,
       sellPackage,
       submitForm,
+      refreshForms,
+      sendFormRequest,
       uploadIntakeFile,
       intakeFileUrl,
     };
@@ -1291,6 +1375,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     recordCheckout,
     sellPackage,
     submitForm,
+    refreshForms,
+    sendFormRequest,
     uploadIntakeFile,
     intakeFileUrl,
   ]);

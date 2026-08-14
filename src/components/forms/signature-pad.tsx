@@ -11,9 +11,15 @@ interface SignaturePadProps {
   onChange: (dataUrl: string | null) => void;
 }
 
+// A tap or a stray dot is not a signature — require this much drawn distance
+// (px) before the pad reports one.
+const MIN_INK_DISTANCE = 60;
+
 export function SignaturePad({ onChange }: SignaturePadProps) {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const drawing = React.useRef(false);
+  const lastPoint = React.useRef<{ x: number; y: number } | null>(null);
+  const inkDistance = React.useRef(0);
   const [hasInk, setHasInk] = React.useState(false);
 
   // Match the canvas bitmap to its rendered size once mounted (crisp on retina).
@@ -45,6 +51,7 @@ export function SignaturePad({ onChange }: SignaturePadProps) {
     const ctx = e.currentTarget.getContext("2d");
     if (!ctx) return;
     const { x, y } = point(e);
+    lastPoint.current = { x, y };
     ctx.beginPath();
     ctx.moveTo(x, y);
   }
@@ -54,6 +61,13 @@ export function SignaturePad({ onChange }: SignaturePadProps) {
     const ctx = e.currentTarget.getContext("2d");
     if (!ctx) return;
     const { x, y } = point(e);
+    if (lastPoint.current) {
+      inkDistance.current += Math.hypot(
+        x - lastPoint.current.x,
+        y - lastPoint.current.y
+      );
+    }
+    lastPoint.current = { x, y };
     ctx.lineTo(x, y);
     ctx.stroke();
   }
@@ -61,6 +75,8 @@ export function SignaturePad({ onChange }: SignaturePadProps) {
   function handleUp(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!drawing.current) return;
     drawing.current = false;
+    lastPoint.current = null;
+    if (inkDistance.current < MIN_INK_DISTANCE) return;
     setHasInk(true);
     onChange(e.currentTarget.toDataURL("image/png"));
   }
@@ -71,6 +87,8 @@ export function SignaturePad({ onChange }: SignaturePadProps) {
     if (canvas && ctx) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
+    inkDistance.current = 0;
+    lastPoint.current = null;
     setHasInk(false);
     onChange(null);
   }

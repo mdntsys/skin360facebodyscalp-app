@@ -10,7 +10,9 @@ import { toast } from "sonner";
 import {
   FileSignature,
   FileText,
+  Hourglass,
   ImageIcon,
+  Link2,
   Plus,
   Upload,
 } from "lucide-react";
@@ -32,14 +34,34 @@ import { SubmissionDialog } from "../../forms/_components/submission-dialog";
 import { IntakeFormPreviewDialog } from "./intake-form-preview";
 
 export function IntakeFormsTab({ client }: { client: Client }) {
-  const { intakeForms, formSubmissions, formTemplates, uploadIntakeFile, intakeFileUrl } =
-    useData();
+  const {
+    intakeForms,
+    formSubmissions,
+    formTemplates,
+    formRequests,
+    uploadIntakeFile,
+    intakeFileUrl,
+    refreshForms,
+  } = useData();
+
+  // Send-ahead submissions arrive outside this session — catch up on mount.
+  React.useEffect(() => {
+    void refreshForms();
+  }, [refreshForms]);
   const [preview, setPreview] = React.useState<IntakeForm | null>(null);
   const [viewing, setViewing] = React.useState<FormSubmission | null>(null);
   const [uploading, setUploading] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const submissions = formSubmissions.filter((s) => s.clientId === client.id);
+  // Links die server-side after 60 days — don't offer copies of dead ones.
+  const LINK_LIFETIME_MS = 60 * 24 * 60 * 60 * 1000;
+  const pendingRequests = formRequests.filter(
+    (r) =>
+      r.clientId === client.id &&
+      r.status === "pending" &&
+      Date.now() - new Date(r.createdISO).getTime() < LINK_LIFETIME_MS
+  );
   const files = intakeForms
     .filter((f) => f.clientId === client.id)
     .sort(
@@ -117,7 +139,53 @@ export function IntakeFormsTab({ client }: { client: Client }) {
           </div>
         </CardHeader>
         <CardContent>
-          {submissions.length === 0 && files.length === 0 ? (
+          {pendingRequests.length > 0 && (
+            <div className="mb-3 space-y-2">
+              {pendingRequests.map((r) => {
+                const template = formTemplates.find(
+                  (t) => t.id === r.templateId
+                );
+                return (
+                  <div
+                    key={r.id}
+                    className="flex items-center gap-3 rounded-2xl border border-gold-200 bg-gold-50 px-4 py-2.5"
+                  >
+                    <Hourglass
+                      className="size-4 shrink-0 text-gold-600"
+                      strokeWidth={1.75}
+                    />
+                    <p className="min-w-0 flex-1 truncate text-sm text-ink">
+                      {template?.name ?? "Form"}{" "}
+                      <span className="text-xs font-light text-muted-warm">
+                        — sent {format(new Date(r.createdISO), "MMM d")},
+                        waiting on {client.firstName}
+                      </span>
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={async () => {
+                        const link = `${window.location.origin}/f/${r.id}`;
+                        try {
+                          await navigator.clipboard.writeText(link);
+                          toast.success("Form link copied.");
+                        } catch {
+                          window.prompt("Copy this form link:", link);
+                        }
+                      }}
+                    >
+                      <Link2 data-icon="inline-start" strokeWidth={1.75} />
+                      Copy Link
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {submissions.length === 0 &&
+          files.length === 0 &&
+          pendingRequests.length === 0 ? (
             <p className="py-8 text-center text-sm font-light text-muted-warm">
               Nothing on file yet — fill out a form together on the Forms page,
               or upload a photo of a signed paper form.

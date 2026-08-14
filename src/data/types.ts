@@ -315,6 +315,17 @@ export interface FormSubmission {
   signedISO: string;
 }
 
+/** A send-ahead link: emailed or hand-texted, filled by the client at home. */
+export interface FormRequest {
+  id: string;
+  templateId: string;
+  clientId: string;
+  status: "pending" | "completed";
+  createdISO: string;
+  completedISO?: string;
+  submissionId?: string;
+}
+
 export interface ClientNote {
   id: string;
   clientId: string;

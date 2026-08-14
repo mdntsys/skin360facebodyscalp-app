@@ -117,6 +117,12 @@ export function SubmissionDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="px-6 py-5">
+          {current && Object.keys(current.data).length === 0 && (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              No answers were filled in on this form — only the signature was
+              captured. You may want to go over it with the client.
+            </div>
+          )}
           {template?.schema.sections.map((section, i) => (
             <div key={i} className="mb-5">
               {section.title && (
@@ -130,7 +136,38 @@ export function SubmissionDialog({
               {section.fields.map((f) => renderAnswer(f, current?.data[f.key]))}
             </div>
           ))}
-          {current?.signatureDataUrl && (
+          {/* Answers whose fields were later removed from the template —
+              never silently hide what a client wrote on a medical form. */}
+          {(() => {
+            if (!current || !template) return null;
+            const known = new Set(
+              template.schema.sections.flatMap((s) => s.fields.map((f) => f.key))
+            );
+            const orphaned = Object.entries(current.data).filter(
+              ([k, v]) => !known.has(k) && v != null && v !== ""
+            );
+            if (orphaned.length === 0) return null;
+            return (
+              <div className="mb-5">
+                <div className="mb-2 flex items-center gap-4">
+                  <h3 className="shrink-0 text-base text-ink">
+                    Other answers (from an earlier version of this form)
+                  </h3>
+                  <div className="h-px flex-1 bg-line" />
+                </div>
+                {orphaned.map(([k, v]) => (
+                  <AnswerLine
+                    key={k}
+                    label={k.replace(/_/g, " ")}
+                    value={
+                      typeof v === "string" ? v : JSON.stringify(v)
+                    }
+                  />
+                ))}
+              </div>
+            );
+          })()}
+          {current?.signatureDataUrl?.startsWith("data:image/") && (
             <div className="mt-6 border-t border-line pt-4">
               <p className="text-[10px] font-normal tracking-[0.16em] text-muted-warm uppercase">
                 Client signature

@@ -20,8 +20,12 @@ Square-as-software and GoFormz.
 1. **Cassie's days** → seed `availability_rules` for staff-cassie (her rules
    were cleared on purpose; she's lash/brow/wax now). Blocks nothing except
    Cassie appearing online.
-2. **Yes to the GoFormz history migration** (~100 completed signed forms).
-3. Terminal ordered (hers to do; she'll text — no build dependency).
+2. Terminal ordered (hers to do; she'll text — no build dependency).
+
+**GoFormz history migration: NOT NEEDED** (Carolina 2026-08-14 — the ~100
+completed forms are Toluca clients she already has saved). She can cancel
+GoFormz as soon as she's clicked through the new forms. The
+`attach-goformz-pdfs.mjs` script stays in the repo unused, just in case.
 
 ## Nic — one-time, before flip
 1. **Vercel env vars** (app project → Settings → Environment Variables,
@@ -30,17 +34,11 @@ Square-as-software and GoFormz.
    - `RESEND_API_KEY` = (value in `.env.local`)
    - `EMAIL_FROM` = `Skin 360 Face Body Scalp <hello@skin360facebodyscalp.com>`
    - (optional) `EMAIL_REPLY_TO` — defaults to her yahoo in code
+   - (optional) `NEXT_PUBLIC_APP_URL` = `https://app.skin360facebodyscalp.com`
+     — emailed form links; code falls back to this exact domain in production
    Alternative: run `vercel login` once and Claude can set these via CLI.
-2. **GoFormz export** (once she says yes): GoFormz → Forms → filter All time →
-   download each Completed form's PDF into one folder (~100). Then:
-   ```
-   node scripts/attach-goformz-pdfs.mjs --dir <folder> --dry-run   # review match table
-   APP_LOGIN_EMAIL=... APP_LOGIN_PASSWORD=... \
-     node scripts/attach-goformz-pdfs.mjs --dir <folder>           # attach for real
-   ```
-   (`pdftotext` required — already installed. Unmatched files get attached by
-   hand via client profile → Upload Scan. The 19 GoFormz Drafts: confirm with
-   Carolina they can be ignored.)
+2. ~~GoFormz export~~ — cancelled by Carolina 2026-08-14: the completed forms
+   are Toluca clients she already has saved; nothing to migrate.
 
 ## Flip day — in this order
 1. Seed Cassie's real days (needs her answer).
@@ -62,8 +60,8 @@ Square-as-software and GoFormz.
 8. After a clean day or two: drop the Square plan to **Free** (the Sep 1
    Premium→Plus downgrade is already scheduled; Free comes after the final
    import is verified). Terminals/processing unaffected.
-9. Cancel **GoFormz** — only after the history migration ran and Carolina has
-   clicked through the new forms.
+9. Cancel **GoFormz** — whenever Carolina has clicked through the new forms
+   (no migration needed; see above).
 
 ## Parked (post-flip, on request)
 Gift-card page decision (Square-powered page works; her WooCommerce GC still

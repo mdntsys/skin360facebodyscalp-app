@@ -12,6 +12,7 @@ import type {
   Expense,
   ExpenseCategory,
   FormCategory,
+  FormRequest,
   FormSubmission,
   FormTemplate,
   IntakeForm,
@@ -519,6 +520,28 @@ export function mapFormSubmission(r: FormSubmissionRow): FormSubmission {
     data: r.data ?? {},
     signatureDataUrl: r.signature_data_url,
     signedISO: r.signed_at,
+  };
+}
+
+export interface FormRequestRow {
+  id: string;
+  template_id: string;
+  client_id: string;
+  status: string;
+  created_at: string;
+  completed_at: string | null;
+  submission_id: string | null;
+}
+
+export function mapFormRequest(r: FormRequestRow): FormRequest {
+  return {
+    id: r.id,
+    templateId: r.template_id,
+    clientId: r.client_id,
+    status: r.status as FormRequest["status"],
+    createdISO: r.created_at,
+    completedISO: r.completed_at ?? undefined,
+    submissionId: r.submission_id ?? undefined,
   };
 }
 

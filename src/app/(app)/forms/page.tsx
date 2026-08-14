@@ -6,7 +6,8 @@
 
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
-import { ClipboardList, FileSignature } from "lucide-react";
+import { ClipboardList, FileSignature, Link2, Mail } from "lucide-react";
+import { toast } from "sonner";
 
 import { useData, type Client, type FormTemplate } from "@/data";
 import { PageHeader } from "@/components/shared/page-header";
@@ -34,13 +35,59 @@ const CATEGORY_LABEL: Record<string, string> = {
 };
 
 function FormsPageInner() {
-  const { formTemplates, formSubmissions, clients, clientName } = useData();
+  const {
+    formTemplates,
+    formSubmissions,
+    clients,
+    clientName,
+    sendFormRequest,
+    refreshForms,
+  } = useData();
   const searchParams = useSearchParams();
+
+  // Send-ahead submissions arrive outside this session — catch up on mount.
+  React.useEffect(() => {
+    void refreshForms();
+  }, [refreshForms]);
 
   const [clientId, setClientId] = React.useState(
     () => searchParams.get("client") ?? ""
   );
   const [active, setActive] = React.useState<FormTemplate | null>(null);
+  const [sending, setSending] = React.useState<string | null>(null);
+
+  async function handleSend(
+    template: FormTemplate,
+    deliver: "email" | "link"
+  ) {
+    if (!clientId || sending) return;
+    setSending(`${template.id}:${deliver}`);
+    try {
+      const { link, emailed } = await sendFormRequest(
+        clientId,
+        template.id,
+        deliver
+      );
+      if (deliver === "email" && emailed) {
+        toast.success(`${template.name} emailed to ${clientName(clientId)}.`);
+      } else {
+        // Safari refuses clipboard writes after an await (gesture expired) —
+        // fall back to showing the link so it can be copied by hand.
+        try {
+          await navigator.clipboard.writeText(link);
+          toast.success("Form link copied — paste it into a text.");
+        } catch {
+          window.prompt("Copy this form link:", link);
+        }
+      }
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Couldn't create the form link."
+      );
+    } finally {
+      setSending(null);
+    }
+  }
 
   const templates = formTemplates.filter((t) => t.active);
   const sortedClients = React.useMemo(
@@ -145,6 +192,34 @@ function FormsPageInner() {
                     <FileSignature data-icon="inline-start" strokeWidth={1.75} />
                     {client ? "Fill Out & Sign" : "Pick a client first"}
                   </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={
+                        !client ||
+                        !client.email ||
+                        sending === `${t.id}:email`
+                      }
+                      onClick={() => handleSend(t, "email")}
+                    >
+                      <Mail data-icon="inline-start" strokeWidth={1.75} />
+                      {sending === `${t.id}:email`
+                        ? "Sending…"
+                        : client && !client.email
+                          ? "No Email on File"
+                          : "Email Link"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!client || sending === `${t.id}:link`}
+                      onClick={() => handleSend(t, "link")}
+                    >
+                      <Link2 data-icon="inline-start" strokeWidth={1.75} />
+                      {sending === `${t.id}:link` ? "Creating…" : "Copy Link"}
+                    </Button>
+                  </div>
                   {signedCount > 0 && (
                     <p className="text-center text-xs font-light text-muted-warm">
                       {signedCount} signed on file

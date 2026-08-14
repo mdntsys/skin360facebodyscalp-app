@@ -367,13 +367,29 @@ export async function publicAvailability(args: {
 
 // --- Create ------------------------------------------------------------------
 
-function confirmationEmailHtml(args: {
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function confirmationEmailHtml(rawArgs: {
   firstName: string;
   serviceName: string;
   addonNames: string[];
   startAt: string;
   staffName: string;
 }): string {
+  // firstName arrives from the public booking form — escape everything.
+  const args = {
+    ...rawArgs,
+    firstName: escapeHtml(rawArgs.firstName),
+    serviceName: escapeHtml(rawArgs.serviceName),
+    staffName: escapeHtml(rawArgs.staffName),
+    addonNames: rawArgs.addonNames.map(escapeHtml),
+  };
   const when = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles",
     weekday: "long",
