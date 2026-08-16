@@ -272,12 +272,14 @@ export interface AppSettingsRow {
   id: number;
   online_booking_enabled: boolean;
   min_notice_hours: number;
+  staff_sees_all_schedules: boolean;
 }
 
 export function mapAppSettings(r: AppSettingsRow): AppSettings {
   return {
     onlineBookingEnabled: r.online_booking_enabled,
     minNoticeHours: Number(r.min_notice_hours),
+    staffSeesAllSchedules: r.staff_sees_all_schedules ?? false,
   };
 }
 

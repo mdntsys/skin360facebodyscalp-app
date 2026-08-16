@@ -88,6 +88,10 @@ export interface Profile {
   lastName: string;
   role: string;
   email: string;
+  /** "admin" = Carolina/Nic (everything); "staff" = a girl checking her schedule. */
+  access: "admin" | "staff";
+  /** Which staff column a staff login belongs to (null for admins). */
+  staffId: string | null;
 }
 
 export interface NewAppointmentInput {
@@ -325,6 +329,7 @@ export interface DataContextValue extends Collections {
 const DEFAULT_APP_SETTINGS: AppSettings = {
   onlineBookingEnabled: false,
   minNoticeHours: 72,
+  staffSeesAllSchedules: false,
 };
 
 const EMPTY: Collections = {
@@ -458,6 +463,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             lastName: prof.last_name,
             role: prof.role,
             email: user.email ?? "",
+            access: prof.access === "staff" ? "staff" : "admin",
+            staffId: prof.staff_id ?? null,
           });
         }
       }
@@ -987,6 +994,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         patch.online_booking_enabled = input.onlineBookingEnabled;
       if (input.minNoticeHours !== undefined)
         patch.min_notice_hours = input.minNoticeHours;
+      if (input.staffSeesAllSchedules !== undefined)
+        patch.staff_sees_all_schedules = input.staffSeesAllSchedules;
       const { error } = await supabase.from("app_settings").upsert(patch);
       if (error) throw new Error(error.message);
       setData((prev) => ({
@@ -1229,7 +1238,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
       throw new Error(payload.error ?? "Couldn't create the form link.");
     },
-    [supabase]
+    []
   );
 
   const intakeFileUrl = React.useCallback(

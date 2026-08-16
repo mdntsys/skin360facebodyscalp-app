@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { RotateCcw } from "lucide-react";
 
 import { DataProvider, useData } from "@/data";
 import { Button } from "@/components/ui/button";
 import { LocationProvider } from "./location-context";
+import { STAFF_HOME } from "./nav";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 
@@ -20,8 +22,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 function ShellFrame({ children }: { children: React.ReactNode }) {
-  const { status, errorMessage, refresh } = useData();
+  const { status, errorMessage, refresh, profile } = useData();
   const [collapsed, setCollapsed] = React.useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+
+  // Staff logins (the girls) live on the schedule page only. RLS already hides
+  // everything else server-side; this keeps the UI from showing empty shells.
+  const staffOffLimits =
+    status === "ready" &&
+    profile?.access === "staff" &&
+    !pathname.startsWith(STAFF_HOME);
+  React.useEffect(() => {
+    if (staffOffLimits) router.replace(STAFF_HOME);
+  }, [staffOffLimits, router]);
+
+  if (staffOffLimits) return null;
 
   if (status !== "ready") {
     return (

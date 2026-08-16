@@ -21,6 +21,30 @@ Square-as-software and GoFormz.
    were cleared on purpose; she's lash/brow/wax now). Blocks nothing except
    Cassie appearing online.
 2. Terminal ordered (hers to do; she'll text — no build dependency).
+3. **The girls' emails** (one per girl) → create their logins, see below.
+4. **Own vs whole-team schedule** for staff logins → Settings → Team →
+   "Girls can see each other's schedules" switch (default OFF = own only).
+
+## Girls' logins (built 2026-08-15, ready when Carolina sends emails)
+
+Staff logins see the read-only `/schedule` page and nothing else — RLS locks
+money, clients, and forms to admin logins, and every table write is
+admin-only, so a girl's login is view-only even against the raw API.
+
+Per girl, two steps:
+1. Supabase dashboard → Authentication → Add user → her email + a password
+   (email confirmed). Copy the new user's UUID.
+2. Link the profile (staff ids: staff-karen, staff-cassie, staff-vero,
+   staff-catalina, staff-dom, staff-josseline, staff-carolina):
+   ```sql
+   insert into public.profiles (id, first_name, last_name, role, access, staff_id)
+   values ('<auth-user-uuid>', 'Karen', '', 'Body Treatments', 'staff', 'staff-karen');
+   ```
+   Without a profile row the login can't see anything at all; without
+   `staff_id` an own-schedule-only login sees an empty schedule (the page
+   tells her the login isn't finished being set up).
+
+Carolina's and Nic's existing logins are `access = 'admin'` — unchanged.
 
 **GoFormz history migration: NOT NEEDED** (Carolina 2026-08-14 — the ~100
 completed forms are Toluca clients she already has saved). She can cancel

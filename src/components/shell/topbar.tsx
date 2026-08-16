@@ -7,7 +7,7 @@ import { LogOut, MapPin, Menu, Search, User } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/brand/logo";
-import { navItems } from "./nav";
+import { navItemsFor } from "./nav";
 import { useLocationFilter } from "./location-context";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -43,6 +43,9 @@ export function Topbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
+  const isStaff = profile?.access === "staff";
+  const items = navItemsFor(profile?.access);
+
   const displayName = profile
     ? `${profile.firstName} ${profile.lastName}`.trim()
     : "Signed in";
@@ -77,7 +80,7 @@ export function Topbar() {
             </SheetTitle>
           </SheetHeader>
           <nav className="space-y-1 px-3 py-4">
-            {navItems.map((item) => {
+            {items.map((item) => {
               const active =
                 pathname === item.href || pathname.startsWith(item.href + "/");
               return (
@@ -126,18 +129,27 @@ export function Topbar() {
         </SelectContent>
       </Select>
 
-      {/* Search */}
-      <div className="relative ml-auto hidden w-full max-w-xs md:block">
-        <Search className="absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-warm" />
-        <Input
-          placeholder="Search clients, appointments…"
-          className="h-10 rounded-full border-line bg-white pl-10 shadow-none placeholder:text-muted-warm/70 focus-visible:border-gold-300"
-        />
-      </div>
+      {/* Search (admin only — staff logins have no client pages to search) */}
+      {!isStaff && (
+        <div className="relative ml-auto hidden w-full max-w-xs md:block">
+          <Search className="absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-warm" />
+          <Input
+            placeholder="Search clients, appointments…"
+            className="h-10 rounded-full border-line bg-white pl-10 shadow-none placeholder:text-muted-warm/70 focus-visible:border-gold-300"
+          />
+        </div>
+      )}
 
       {/* User menu */}
       <DropdownMenu>
-        <DropdownMenuTrigger className="ml-auto rounded-full outline-none focus-visible:ring-2 focus-visible:ring-gold-300 md:ml-0">
+        <DropdownMenuTrigger
+          className={cn(
+            "ml-auto rounded-full outline-none focus-visible:ring-2 focus-visible:ring-gold-300",
+            // The search box is the md+ right-side spacer; without it (staff)
+            // the avatar keeps ml-auto at every size.
+            !isStaff && "md:ml-0"
+          )}
+        >
           <Avatar className="size-10 border border-gold-200">
             <AvatarFallback className="bg-gold-50 font-heading text-sm text-gold-700">
               {initials}
@@ -155,11 +167,13 @@ export function Topbar() {
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <Link href="/settings">
-              <User className="size-4" /> My profile
-            </Link>
-          </DropdownMenuItem>
+          {!isStaff && (
+            <DropdownMenuItem asChild>
+              <Link href="/settings">
+                <User className="size-4" /> My profile
+              </Link>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => void handleSignOut()}>
             <LogOut className="size-4" /> Sign out
           </DropdownMenuItem>

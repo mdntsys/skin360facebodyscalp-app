@@ -20,6 +20,18 @@ export interface NavItem {
   icon: LucideIcon;
 }
 
+// Staff logins (the girls) get exactly one destination: their schedule.
+export const staffNavItems: NavItem[] = [
+  { label: "Schedule", href: "/schedule", icon: CalendarDays },
+];
+
+/** The staff landing page — where every staff-login redirect points. */
+export const STAFF_HOME = "/schedule";
+
+export function navItemsFor(access: "admin" | "staff" | undefined): NavItem[] {
+  return access === "staff" ? staffNavItems : navItems;
+}
+
 export const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Appointments", href: "/appointments", icon: CalendarDays },

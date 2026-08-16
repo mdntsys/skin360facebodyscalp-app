@@ -141,6 +141,8 @@ export interface TimeBlock {
 export interface AppSettings {
   onlineBookingEnabled: boolean;
   minNoticeHours: number;
+  /** When on, staff logins see every girl's schedule instead of just their own. */
+  staffSeesAllSchedules: boolean;
 }
 
 export interface Product {

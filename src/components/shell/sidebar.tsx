@@ -5,8 +5,9 @@ import { usePathname } from "next/navigation";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useData } from "@/data";
 import { Logo } from "@/components/brand/logo";
-import { navItems } from "./nav";
+import { navItemsFor, STAFF_HOME } from "./nav";
 import {
   Tooltip,
   TooltipContent,
@@ -21,6 +22,9 @@ export function Sidebar({
   onToggle: () => void;
 }) {
   const pathname = usePathname();
+  const { profile } = useData();
+  const items = navItemsFor(profile?.access);
+  const homeHref = profile?.access === "staff" ? STAFF_HOME : "/dashboard";
 
   return (
     <aside
@@ -35,13 +39,13 @@ export function Sidebar({
           collapsed ? "justify-center px-2 py-5" : "px-6 py-5"
         )}
       >
-        <Link href="/dashboard" aria-label="Skin 360 dashboard">
+        <Link href={homeHref} aria-label="Skin 360 home">
           <Logo compact={collapsed} />
         </Link>
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
-        {navItems.map((item) => {
+        {items.map((item) => {
           const active =
             pathname === item.href || pathname.startsWith(item.href + "/");
           const link = (

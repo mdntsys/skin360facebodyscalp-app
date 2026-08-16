@@ -19,6 +19,7 @@ import { AccountCard } from "./_components/account-card";
 import { BookingPolicyCard } from "./_components/booking-policy-card";
 import { RoomsSection } from "./_components/rooms-section";
 import { ServicesSection } from "./_components/services-section";
+import { StaffLoginsCard } from "./_components/staff-logins-card";
 import { TeamSection } from "./_components/team-section";
 
 const BUSINESS_FIELDS: { label: string; value: string }[] = [
@@ -219,6 +220,7 @@ export default function SettingsPage() {
         {/* ---------- Team ---------- */}
         <TabsContent value="team" className="mt-4">
           <TeamSection />
+          <StaffLoginsCard />
         </TabsContent>
 
         {/* ---------- Services ---------- */}
