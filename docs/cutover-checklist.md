@@ -17,33 +17,40 @@ Square-as-software and GoFormz.
   `Website/src/data/site.ts` next to Valencia's `bookingUrl`.
 
 ## Waiting on Carolina
-1. **Cassie's days** → seed `availability_rules` for staff-cassie (her rules
-   were cleared on purpose; she's lash/brow/wax now). Blocks nothing except
-   Cassie appearing online.
-2. Terminal ordered (hers to do; she'll text — no build dependency).
-3. **The girls' emails** (one per girl) → create their logins, see below.
-4. **Own vs whole-team schedule** for staff logins → Settings → Team →
-   "Girls can see each other's schedules" switch (default OFF = own only).
+1. Terminal ordered (hers to do; she'll text — no build dependency).
+2. **Girls managing their own days off** — asked 2026-08-16 whether the girls
+   should be able to block their own days from their logins or whether that
+   stays Carolina-only. If yes: small build (staff-scoped write on
+   `availability_overrides` + an "I'm off" flow on `/schedule`).
 
-## Girls' logins (built 2026-08-15, ready when Carolina sends emails)
+## Girls' logins — CREATED 2026-08-16, all five verified working
+
+Carolina answered 2026-08-16: girls see **only their own schedule** (the
+`staff_sees_all_schedules` switch stays OFF — she sees everything as admin).
+
+| Girl | Email | staff_id |
+|---|---|---|
+| Cassie | cassiedhughes@icloud.com | staff-cassie |
+| Dominique | dominique5805@att.net | staff-dom |
+| Veronica | veronicaalvarez12@gmail.com | staff-vero |
+| Karen | kaparedes@yahoo.com | staff-karen |
+| Josseline | josseline@artisanofskin.com | staff-josseline |
+
+Every login was tested against live auth + data API (own appointments only,
+zero money/forms rows, writes rejected). Temp passwords are with Nic
+(`~/Downloads/skin360-staff-logins.txt`) to hand to Carolina. Catalina and
+anyone new later: Supabase → Auth → Add user, then
+`insert into profiles (id, first_name, last_name, role, access, staff_id)
+values ('<uuid>', 'Name', '', 'Role', 'staff', 'staff-<id>');`
+
+**Cassie's days seeded 2026-08-16** per Carolina ("cannot work Mondays and
+Fridays"): Tue/Wed/Thu 10–6 + Sat 9–4, Valencia — the standard girl pattern
+minus Mon/Fri. If her hours differ, Carolina can fix them on the
+Availability page herself.
 
 Staff logins see the read-only `/schedule` page and nothing else — RLS locks
 money, clients, and forms to admin logins, and every table write is
 admin-only, so a girl's login is view-only even against the raw API.
-
-Per girl, two steps:
-1. Supabase dashboard → Authentication → Add user → her email + a password
-   (email confirmed). Copy the new user's UUID.
-2. Link the profile (staff ids: staff-karen, staff-cassie, staff-vero,
-   staff-catalina, staff-dom, staff-josseline, staff-carolina):
-   ```sql
-   insert into public.profiles (id, first_name, last_name, role, access, staff_id)
-   values ('<auth-user-uuid>', 'Karen', '', 'Body Treatments', 'staff', 'staff-karen');
-   ```
-   Without a profile row the login can't see anything at all; without
-   `staff_id` an own-schedule-only login sees an empty schedule (the page
-   tells her the login isn't finished being set up).
-
 Carolina's and Nic's existing logins are `access = 'admin'` — unchanged.
 
 **GoFormz history migration: NOT NEEDED** (Carolina 2026-08-14 — the ~100
@@ -65,7 +72,7 @@ GoFormz as soon as she's clicked through the new forms. The
    are Toluca clients she already has saved; nothing to migrate.
 
 ## Flip day — in this order
-1. Seed Cassie's real days (needs her answer).
+1. ~~Seed Cassie's real days~~ — done 2026-08-16 (Tue/Wed/Thu 10–6, Sat 9–4).
 2. Re-run the Square import so the calendar is current (idempotent, reconciles
    cancellations):
    ```
