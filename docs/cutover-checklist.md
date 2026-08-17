@@ -17,11 +17,19 @@ Square-as-software and GoFormz.
   `Website/src/data/site.ts` next to Valencia's `bookingUrl`.
 
 ## Waiting on Carolina
-1. Terminal ordered (hers to do; she'll text — no build dependency).
-2. **Girls managing their own days off** — asked 2026-08-16 whether the girls
-   should be able to block their own days from their logins or whether that
-   stays Carolina-only. If yes: small build (staff-scoped write on
-   `availability_overrides` + an "I'm off" flow on `/schedule`).
+1. **Catalina's day** — Carolina (2026-08-16) wants her on a different day,
+   NOT Wednesdays (currently seeded Wed/Thu 10–2). Waiting on which day;
+   Carolina can also change it herself on the Availability page. Catalina's
+   login: waiting on her email.
+
+## Answered 2026-08-16 (no action)
+- **Schedule blocking stays Carolina-only for now** — "maybe in the future."
+  Current build already matches (staff logins are read-only); the girls'
+  self-serve days-off flow stays parked until she asks.
+- **Passwords are fine** — girls may want changes later. No self-serve
+  password change in the app; a change is a one-line admin reset when asked.
+- **GoDaddy terminal being set up 2026-08-17** — the thing she said she'd
+  text about. No build dependency; it's the Valencia payments hardware.
 
 ## Girls' logins — CREATED 2026-08-16, all five verified working
 
