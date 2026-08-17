@@ -34,7 +34,7 @@ Carolina answered 2026-08-16: girls see **only their own schedule** (the
 | Dominique | dominique5805@att.net | staff-dom |
 | Veronica | veronicaalvarez12@gmail.com | staff-vero |
 | Karen | kaparedes@yahoo.com | staff-karen |
-| Josseline | josseline@artisanofskin.com | staff-josseline |
+| Josseline | jbmejia47@gmail.com (corrected 2026-08-16; artisanofskin.com login deleted) | staff-josseline |
 
 Every login was tested against live auth + data API (own appointments only,
 zero money/forms rows, writes rejected). Temp passwords are with Nic
