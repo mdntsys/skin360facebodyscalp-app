@@ -397,6 +397,7 @@ function confirmationEmailHtml(rawArgs: {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZoneName: "short",
   }).format(new Date(args.startAt));
   return `
   <div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:32px;background:#fdfbf6;color:#2b2723">
@@ -544,12 +545,14 @@ export async function createPublicBooking(args: {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZoneName: "short",
   }).format(new Date(result.startAt));
   const addonLine =
     addons.length > 0 ? ` + ${addons.map((a) => a.name).join(", ")}` : "";
   const clientName = [args.customer.givenName, args.customer.familyName]
     .filter(Boolean)
     .join(" ");
+  const nicBcc = ["nic@midnitesystems.com"];
   try {
     await sendEmail({
       to: args.customer.email,
@@ -561,6 +564,7 @@ export async function createPublicBooking(args: {
         startAt: result.startAt,
         staffName,
       }),
+      bcc: nicBcc,
     });
   } catch (err) {
     console.error("booking confirmation email failed:", err);

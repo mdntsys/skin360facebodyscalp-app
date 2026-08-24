@@ -11,6 +11,7 @@ export async function sendEmail(args: {
   subject: string;
   html: string;
   replyTo?: string;
+  bcc?: string[];
 }): Promise<EmailResult> {
   const key = process.env.RESEND_API_KEY;
   if (!key) return { sent: false };
@@ -24,6 +25,9 @@ export async function sendEmail(args: {
     args.replyTo ??
     process.env.EMAIL_REPLY_TO ??
     "skin360facebodyscalp@yahoo.com";
+  const to = args.to.trim().toLowerCase();
+  const bcc = [...new Set((args.bcc ?? []).map((e) => e.trim()).filter(Boolean))]
+    .filter((e) => e.toLowerCase() !== to);
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -36,6 +40,7 @@ export async function sendEmail(args: {
       subject: args.subject,
       html: args.html,
       reply_to: [replyTo],
+      ...(bcc.length ? { bcc } : {}),
     }),
   });
   if (!res.ok) {

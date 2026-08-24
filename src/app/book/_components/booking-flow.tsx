@@ -74,6 +74,7 @@ const longFormat = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
   hour: "numeric",
   minute: "2-digit",
+  timeZoneName: "short",
 });
 
 function price(cents: number | null): string {
