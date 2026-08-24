@@ -1,8 +1,13 @@
 # Valencia go-live runbook
 
-Last updated 2026-08-13. Everything is built; this is the ordered checklist to
-take app.skin360facebodyscalp.com live as Valencia's booking system and retire
-Square-as-software and GoFormz.
+Last updated 2026-08-24. **Valencia is LIVE.** Toluca stays on GlossGenius.
+
+Went live 2026-08-24:
+- Square calendar re-imported (14 upcoming bookings). Staff capability rewrite skipped on purpose (would have undone Cassie/Vero/Catalina).
+- `online_booking_enabled = true`
+- Website Valencia Book → `https://app.skin360facebodyscalp.com/book`
+- Test booking (Classic Facial, Carolina, Tue 10am) created then deleted.
+- Salon notify: yahoo inbox gets a copy of each online booking (app commit 2113772). Client still gets the confirmation. Girls are not emailed; they see their `/schedule` login.
 
 ## Already done (no action)
 - Booking engine live in code: real schedules, capabilities, rooms, add-on flow,
