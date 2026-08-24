@@ -16,7 +16,8 @@ export async function sendEmail(args: {
   if (!key) return { sent: false };
 
   const from =
-    process.env.EMAIL_FROM ?? "Skin 360 <onboarding@resend.dev>";
+    process.env.EMAIL_FROM ??
+    "Skin 360 Face Body Scalp <hello@skin360facebodyscalp.com>";
   // The hello@ sender has no mailbox, so replies route to the salon's real
   // inbox unless a caller overrides it.
   const replyTo =

@@ -77,6 +77,7 @@ GoFormz as soon as she's clicked through the new forms. The
    - `TZ` = `America/Los_Angeles`  ← engine correctness, not optional
    - `RESEND_API_KEY` = (value in `.env.local`)
    - `EMAIL_FROM` = `Skin 360 Face Body Scalp <hello@skin360facebodyscalp.com>`
+     (code now defaults to this even if the env var is missing)
    - (optional) `EMAIL_REPLY_TO` — defaults to her yahoo in code
    - (optional) `NEXT_PUBLIC_APP_URL` = `https://app.skin360facebodyscalp.com`
      — emailed form links; code falls back to this exact domain in production
