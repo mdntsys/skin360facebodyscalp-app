@@ -537,6 +537,19 @@ export async function createPublicBooking(args: {
   const staffName =
     data.staff.find((s) => s.id === args.teamMemberId)?.name.split(" ")[0] ??
     "our team";
+  const when = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(result.startAt));
+  const addonLine =
+    addons.length > 0 ? ` + ${addons.map((a) => a.name).join(", ")}` : "";
+  const clientName = [args.customer.givenName, args.customer.familyName]
+    .filter(Boolean)
+    .join(" ");
   try {
     await sendEmail({
       to: args.customer.email,
@@ -551,6 +564,34 @@ export async function createPublicBooking(args: {
     });
   } catch (err) {
     console.error("booking confirmation email failed:", err);
+  }
+
+  // Salon copy so Carolina sees the booking without opening the app.
+  // Default is the yahoo inbox replies already go to. Not a blast to the girls.
+  const salonTo =
+    process.env.EMAIL_SALON_NOTIFY ?? "skin360facebodyscalp@yahoo.com";
+  try {
+    await sendEmail({
+      to: salonTo,
+      subject: `New online booking — ${service.name} with ${staffName}`,
+      html: `
+  <div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:32px;background:#fdfbf6;color:#2b2723">
+    <p style="text-align:center;letter-spacing:4px;font-size:11px;color:#a67c34">SKIN 360 · VALENCIA</p>
+    <h1 style="text-align:center;font-weight:500">New online booking</h1>
+    <div style="margin:24px auto;padding:20px;border:1px solid #ece3d3;border-radius:16px;background:#fff">
+      <p style="margin:0;font-size:16px">${escapeHtml(service.name)}${escapeHtml(addonLine)}</p>
+      <p style="margin:8px 0 0;font-size:14px">${when}</p>
+      <p style="margin:8px 0 0;font-size:14px;color:#837a6d">with ${escapeHtml(staffName)}</p>
+      <p style="margin:16px 0 0;font-size:14px">${escapeHtml(clientName)}</p>
+      <p style="margin:4px 0 0;font-size:13px;color:#837a6d">${escapeHtml(args.customer.email)}${args.customer.phone ? `<br/>${escapeHtml(args.customer.phone)}` : ""}</p>
+    </div>
+    <p style="text-align:center;font-size:13px;color:#837a6d">
+      It's already on the calendar in the app. No need to add it in Square.
+    </p>
+  </div>`,
+    });
+  } catch (err) {
+    console.error("salon booking notify failed:", err);
   }
 
   return result;
