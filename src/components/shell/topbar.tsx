@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, MapPin, Menu, Search, User } from "lucide-react";
+import { KeyRound, LogOut, MapPin, Menu, Search, User } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/brand/logo";
@@ -35,6 +35,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { useData, type LocationFilter } from "@/data";
+import { ChangePasswordDialog } from "./change-password-dialog";
 
 export function Topbar() {
   const { location, setLocation } = useLocationFilter();
@@ -42,6 +43,7 @@ export function Topbar() {
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [passwordOpen, setPasswordOpen] = React.useState(false);
 
   const isStaff = profile?.access === "staff";
   const items = navItemsFor(profile?.access);
@@ -174,11 +176,15 @@ export function Topbar() {
               </Link>
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem onClick={() => setPasswordOpen(true)}>
+            <KeyRound className="size-4" /> Change password
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => void handleSignOut()}>
             <LogOut className="size-4" /> Sign out
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <ChangePasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} />
     </header>
   );
 }
