@@ -195,8 +195,9 @@ function CapabilitiesDialog({
 }
 
 function TeamMemberRow({ member }: { member: StaffMember }) {
-  const { serviceById, locationById } = useData();
+  const { serviceById, locationById, updateStaff } = useData();
   const [editorOpen, setEditorOpen] = React.useState(false);
+  const [savingOnline, setSavingOnline] = React.useState(false);
 
   const capabilityLabel =
     member.serviceIds.length === 0
@@ -233,6 +234,9 @@ function TeamMemberRow({ member }: { member: StaffMember }) {
         <p className="text-xs font-light text-muted-warm">
           {member.role} ·{" "}
           {member.bookable ? "Takes appointments" : "Not bookable"}
+          {member.bookable && member.onlineBookable === false
+            ? " · in-app only (hidden online)"
+            : ""}
         </p>
         {member.bookable && (
           <p className="mt-1 truncate text-xs font-light text-ink-soft">
@@ -241,6 +245,34 @@ function TeamMemberRow({ member }: { member: StaffMember }) {
           </p>
         )}
       </div>
+      {member.bookable && (
+        <label className="flex shrink-0 items-center gap-2 text-xs font-light text-ink-soft">
+          <Switch
+            checked={member.onlineBookable !== false}
+            disabled={savingOnline}
+            onCheckedChange={async (checked) => {
+              setSavingOnline(true);
+              try {
+                await updateStaff(member.id, { onlineBookable: checked });
+                toast.success(
+                  checked
+                    ? `${member.name} will show on online booking.`
+                    : `${member.name} is hidden from online booking. You can still book them in the app.`
+                );
+              } catch (err) {
+                toast.error(
+                  err instanceof Error
+                    ? err.message
+                    : "Couldn't update online booking."
+                );
+              } finally {
+                setSavingOnline(false);
+              }
+            }}
+          />
+          Show online
+        </label>
+      )}
       {member.bookable && (
         <Button
           variant="outline"

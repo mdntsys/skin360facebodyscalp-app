@@ -51,6 +51,8 @@ export interface StaffMember {
   email: string;
   phone: string;
   bookable: boolean; // admins are staff too, but can't take appointments
+  /** When false, the public /book page never offers this person. In-app booking still can. Absent = shown online. */
+  onlineBookable?: boolean;
   employmentType: EmploymentType;
   serviceIds: string[]; // empty = performs all services
 }
