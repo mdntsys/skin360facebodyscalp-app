@@ -51,6 +51,7 @@ export function AppointmentsClient() {
   const [selectedDate, setSelectedDate] = React.useState(() => new Date());
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [newOpen, setNewOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState<Appointment | null>(null);
   const [blockOpen, setBlockOpen] = React.useState(false);
 
   // Open the booking dialog when arriving via /appointments?new=1
@@ -128,6 +129,21 @@ export function AppointmentsClient() {
       setSelectedDate(start);
       toast.success(
         `Appointment booked for ${clientName(appt.clientId)} · ${format(
+          start,
+          "EEE, MMM d 'at' h:mm a"
+        )}`
+      );
+    },
+    [clientName]
+  );
+
+  const handleUpdated = React.useCallback(
+    (appt: Appointment) => {
+      const start = new Date(appt.startISO);
+      setSelectedDate(start);
+      setSelectedId(appt.id);
+      toast.success(
+        `Appointment updated for ${clientName(appt.clientId)} · ${format(
           start,
           "EEE, MMM d 'at' h:mm a"
         )}`
@@ -243,6 +259,10 @@ export function AppointmentsClient() {
         appointment={selectedAppointment}
         onClose={() => setSelectedId(null)}
         onUpdateStatus={updateStatus}
+        onEdit={(appt) => {
+          setSelectedId(null);
+          setEditing(appt);
+        }}
       />
 
       <NewAppointmentDialog
@@ -250,6 +270,17 @@ export function AppointmentsClient() {
         onOpenChange={handleNewOpenChange}
         defaultLocation={location}
         onCreate={handleCreated}
+      />
+
+      <NewAppointmentDialog
+        open={!!editing}
+        onOpenChange={(open) => {
+          if (!open) setEditing(null);
+        }}
+        defaultLocation={location}
+        appointment={editing}
+        onCreate={handleCreated}
+        onUpdate={handleUpdated}
       />
 
       <BlockTimeDialog

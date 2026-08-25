@@ -40,10 +40,12 @@ export function AppointmentDrawer({
   appointment,
   onClose,
   onUpdateStatus,
+  onEdit,
 }: {
   appointment: Appointment | null;
   onClose: () => void;
   onUpdateStatus: (id: string, status: AppointmentStatus) => void;
+  onEdit?: (appt: Appointment) => void;
 }) {
   const { clientById, serviceById, staffById, locationById, roomById } =
     useData();
@@ -176,10 +178,17 @@ export function AppointmentDrawer({
               Mark Completed
             </Button>
           )}
-          <Button variant="ghost" className="w-full" disabled>
-            <Pencil data-icon="inline-start" strokeWidth={1.75} />
-            Edit Appointment
-          </Button>
+          {(appt.status === "confirmed" || appt.status === "checked-in") &&
+            onEdit && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => onEdit(appt)}
+              >
+                <Pencil data-icon="inline-start" strokeWidth={1.75} />
+                Edit Appointment
+              </Button>
+            )}
         </div>
       </SheetContent>
     </Sheet>

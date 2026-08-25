@@ -264,6 +264,10 @@ export interface DataContextValue extends Collections {
   clientName: (c: Client | string | undefined) => string;
   refresh: () => Promise<void>;
   createAppointment: (input: NewAppointmentInput) => Promise<Appointment>;
+  updateAppointment: (
+    id: string,
+    input: NewAppointmentInput
+  ) => Promise<Appointment>;
   updateAppointmentStatus: (
     id: string,
     status: AppointmentStatus
@@ -507,6 +511,37 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         appointments: [...prev.appointments, created].sort(byStart),
       }));
       return created;
+    },
+    [supabase]
+  );
+
+  const updateAppointment = React.useCallback(
+    async (id: string, input: NewAppointmentInput) => {
+      const { data: row, error } = await supabase
+        .from("appointments")
+        .update({
+          client_id: input.clientId,
+          service_id: input.serviceId,
+          staff_id: input.staffId,
+          location_id: input.locationId,
+          start_at: input.startISO,
+          duration_min: input.durationMin,
+          price: input.price,
+          note: input.note ?? null,
+          room_id: input.roomId ?? null,
+        })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      const updated = mapAppointment(row as AppointmentRow);
+      setData((prev) => ({
+        ...prev,
+        appointments: prev.appointments
+          .map((a) => (a.id === id ? updated : a))
+          .sort(byStart),
+      }));
+      return updated;
     },
     [supabase]
   );
@@ -1330,6 +1365,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       clientName,
       refresh,
       createAppointment,
+      updateAppointment,
       updateAppointmentStatus,
       createClient,
       updateClient,
@@ -1365,6 +1401,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     profile,
     refresh,
     createAppointment,
+    updateAppointment,
     updateAppointmentStatus,
     createClient,
     updateClient,

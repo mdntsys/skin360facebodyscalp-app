@@ -60,9 +60,9 @@ function groupServices(
 /** Select sentinel — SelectItem values can't be empty strings. */
 const NO_ROOM = "none";
 
-// 30-minute slots from 8:00 AM through 6:30 PM
+// 15-minute slots from 8:00 AM through 7:00 PM so Square-imported :15/:45 times are pickable.
 const TIME_SLOTS: { value: string; label: string }[] = [];
-for (let mins = 8 * 60; mins <= 18 * 60 + 30; mins += 30) {
+for (let mins = 8 * 60; mins <= 19 * 60; mins += 15) {
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   const h12 = ((h + 11) % 12) + 1;
@@ -72,16 +72,29 @@ for (let mins = 8 * 60; mins <= 18 * 60 + 30; mins += 30) {
   });
 }
 
+function timeSlotLabel(value: string): string {
+  const existing = TIME_SLOTS.find((s) => s.value === value);
+  if (existing) return existing.label;
+  const [hs, ms] = value.split(":");
+  const h = Number(hs);
+  const h12 = ((h + 11) % 12) + 1;
+  return `${h12}:${ms} ${h >= 12 ? "PM" : "AM"}`;
+}
+
 export function NewAppointmentDialog({
   open,
   onOpenChange,
   defaultLocation,
   onCreate,
+  appointment,
+  onUpdate,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultLocation: LocationFilter;
   onCreate: (appt: Appointment) => void;
+  appointment?: Appointment | null;
+  onUpdate?: (appt: Appointment) => void;
 }) {
   const {
     clients,
@@ -90,12 +103,14 @@ export function NewAppointmentDialog({
     locations,
     serviceById,
     createAppointment,
+    updateAppointment,
     appointments,
     timeBlocks,
     availabilityRules,
     availabilityOverrides,
     rooms,
   } = useData();
+  const editing = Boolean(appointment);
 
   const [clientId, setClientId] = React.useState("");
   const [serviceId, setServiceId] = React.useState("");
@@ -109,9 +124,21 @@ export function NewAppointmentDialog({
   // True once the front desk picks a room by hand — auto-suggestion then backs off.
   const roomTouchedRef = React.useRef(false);
 
-  // Fresh form each time the dialog opens.
+  // Fresh form each time the dialog opens — prefill when editing.
   React.useEffect(() => {
-    if (open) {
+    if (!open) return;
+    if (appointment) {
+      const start = new Date(appointment.startISO);
+      setClientId(appointment.clientId);
+      setServiceId(appointment.serviceId);
+      setStaffId(appointment.staffId);
+      setLocationId(appointment.locationId);
+      setDate(format(start, "yyyy-MM-dd"));
+      setTime(format(start, "HH:mm"));
+      setRoomId(appointment.roomId ?? NO_ROOM);
+      roomTouchedRef.current = true;
+      setNote(appointment.note ?? "");
+    } else {
       setClientId("");
       setServiceId("");
       setStaffId("");
@@ -121,9 +148,9 @@ export function NewAppointmentDialog({
       setRoomId(NO_ROOM);
       roomTouchedRef.current = false;
       setNote("");
-      setSubmitting(false);
     }
-  }, [open, defaultLocation]);
+    setSubmitting(false);
+  }, [open, defaultLocation, appointment]);
 
   const sortedClients = React.useMemo(
     () =>
@@ -184,6 +211,15 @@ export function NewAppointmentDialog({
       .sort((a, b) => a.sort - b.sort);
   }, [rooms, locationId, service]);
 
+  const durationMin =
+    editing && appointment && appointment.serviceId === serviceId
+      ? appointment.durationMin
+      : (service?.durationMin ?? 0);
+  const price =
+    editing && appointment && appointment.serviceId === serviceId
+      ? appointment.price
+      : (service?.price ?? 0);
+
   const draft = React.useMemo<DraftAppointment | null>(() => {
     if (!service || !staffId || !startISO) return null;
     return {
@@ -191,9 +227,18 @@ export function NewAppointmentDialog({
       serviceId,
       staffId,
       startISO,
-      durationMin: service.durationMin,
+      durationMin,
+      excludeAppointmentId: appointment?.id,
     };
-  }, [service, staffId, startISO, locationId, serviceId]);
+  }, [
+    service,
+    staffId,
+    startISO,
+    locationId,
+    serviceId,
+    durationMin,
+    appointment?.id,
+  ]);
 
   const suggestedRoomId = React.useMemo(
     () => (draft ? findRoom(schedulingCtx, draft) : null),
@@ -238,22 +283,32 @@ export function NewAppointmentDialog({
     if (!canSubmit || !service || submitting) return;
     const start = parse(`${date} ${time}`, "yyyy-MM-dd HH:mm", new Date());
     setSubmitting(true);
+    const payload = {
+      clientId,
+      serviceId,
+      staffId,
+      locationId,
+      startISO: start.toISOString(),
+      durationMin,
+      price,
+      note: note.trim() ? note.trim() : undefined,
+      roomId: chosenRoomId ?? null,
+    };
     try {
-      const created = await createAppointment({
-        clientId,
-        serviceId,
-        staffId,
-        locationId,
-        startISO: start.toISOString(),
-        durationMin: service.durationMin,
-        price: service.price,
-        note: note.trim() ? note.trim() : undefined,
-        roomId: chosenRoomId ?? null,
-      });
-      onCreate(created);
+      if (appointment) {
+        const updated = await updateAppointment(appointment.id, payload);
+        onUpdate?.(updated);
+      } else {
+        const created = await createAppointment(payload);
+        onCreate(created);
+      }
       onOpenChange(false);
     } catch {
-      toast.error("Couldn't book the appointment. Please try again.");
+      toast.error(
+        appointment
+          ? "Couldn't update the appointment. Please try again."
+          : "Couldn't book the appointment. Please try again."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -264,11 +319,12 @@ export function NewAppointmentDialog({
       <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto rounded-3xl bg-white p-0 sm:max-w-lg">
         <DialogHeader className="border-b border-line bg-ivory/70 px-6 pt-7 pb-5">
           <DialogTitle className="font-heading text-2xl font-medium text-ink">
-            New Appointment
+            {editing ? "Edit Appointment" : "New Appointment"}
           </DialogTitle>
           <DialogDescription className="text-sm font-light text-muted-warm">
-            Book a service for a client — it appears on the calendar right
-            away.
+            {editing
+              ? "Change the time, service, or who it's with — it updates on the calendar right away."
+              : "Book a service for a client — it appears on the calendar right away."}
           </DialogDescription>
         </DialogHeader>
 
@@ -343,6 +399,13 @@ export function NewAppointmentDialog({
                   <SelectValue placeholder="Select a time" />
                 </SelectTrigger>
                 <SelectContent position="popper" className="max-h-64">
+                  {TIME_SLOTS.some((s) => s.value === time)
+                    ? null
+                    : time && (
+                        <SelectItem value={time} className="text-sm">
+                          {timeSlotLabel(time)}
+                        </SelectItem>
+                      )}
                   {TIME_SLOTS.map((slot) => (
                     <SelectItem
                       key={slot.value}
@@ -474,7 +537,13 @@ export function NewAppointmentDialog({
             </Button>
             <Button type="submit" disabled={!canSubmit || submitting}>
               <Sparkles data-icon="inline-start" strokeWidth={1.75} />
-              {submitting ? "Booking…" : "Book Appointment"}
+              {submitting
+                ? editing
+                  ? "Saving…"
+                  : "Booking…"
+                : editing
+                  ? "Save Changes"
+                  : "Book Appointment"}
             </Button>
           </div>
         </form>
