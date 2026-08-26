@@ -314,9 +314,16 @@ export function TeamSection() {
           </p>
         )}
         <div className="divide-y divide-line/70">
-          {allStaff.map((s) => (
-            <TeamMemberRow key={s.id} member={s} />
-          ))}
+          {allStaff
+            .filter(
+              (s) =>
+                s.bookable ||
+                s.employmentType === "admin" ||
+                s.employmentType === "owner"
+            )
+            .map((s) => (
+              <TeamMemberRow key={s.id} member={s} />
+            ))}
         </div>
       </CardContent>
     </Card>

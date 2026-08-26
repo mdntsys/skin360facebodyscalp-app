@@ -59,6 +59,7 @@ export async function bookingSurfaceEnabled(): Promise<boolean> {
 interface PublicStaffRow {
   id: string;
   name: string;
+  role?: string;
   bookable: boolean;
   serviceIds: string[];
 }
@@ -225,6 +226,7 @@ export interface PublicService {
 export interface PublicStaff {
   id: string;
   name: string;
+  role: string;
 }
 
 /** Add-on: only offered after a main service in one of `addonFor`'s categories. */
@@ -275,7 +277,11 @@ export async function listPublicServices(): Promise<{
   addons.sort((a, b) => a.name.localeCompare(b.name));
   const staff = data.staff
     .filter((s) => s.bookable)
-    .map((s) => ({ id: s.id, name: s.name.split(" ")[0] }));
+    .map((s) => ({
+      id: s.id,
+      name: s.name.split(" ")[0],
+      role: s.role ?? "",
+    }));
   return { services, addons, staff };
 }
 

@@ -22,10 +22,8 @@ Went live 2026-08-24:
   `Website/src/data/site.ts` next to Valencia's `bookingUrl`.
 
 ## Waiting on Carolina
-1. **Catalina's day** — Carolina (2026-08-16) wants her on a different day,
-   NOT Wednesdays (currently seeded Wed/Thu 10–2). Waiting on which day;
-   Carolina can also change it herself on the Availability page. Catalina's
-   login: waiting on her email.
+1. ~~**Catalina's day**~~ — removed from Team and booking 2026-08-26
+   (Carolina: erase from everything). Row kept inactive.
 
 ## Answered 2026-08-16 (no action)
 - **Schedule blocking stays Carolina-only for now** — "maybe in the future."

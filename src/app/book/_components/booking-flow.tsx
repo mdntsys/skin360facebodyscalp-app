@@ -35,6 +35,7 @@ interface PublicAddon {
 interface PublicStaff {
   id: string;
   name: string;
+  role?: string;
 }
 
 interface Slot {
@@ -384,8 +385,12 @@ export function BookingFlow() {
           }
         />
         <div className="overflow-hidden rounded-3xl border border-line bg-white">
-          {[{ id: "any" as const, name: "First available" }, ...performers].map(
-            (s, i, arr) => (
+          {(
+            [
+              { id: "any" as const, name: "First available", role: "" },
+              ...performers,
+            ] as PublicStaff[]
+          ).map((s, i, arr) => (
               <button
                 key={s.id}
                 type="button"
@@ -399,11 +404,19 @@ export function BookingFlow() {
                   i < arr.length - 1 ? "border-b border-line" : ""
                 }`}
               >
-                <span className="text-sm font-medium text-ink">{s.name}</span>
+                <span>
+                  <span className="block text-sm font-medium text-ink">
+                    {s.name}
+                  </span>
+                  {s.role ? (
+                    <span className="block text-xs font-light text-muted-warm">
+                      {s.role}
+                    </span>
+                  ) : null}
+                </span>
                 <span className="text-xs text-muted-warm">›</span>
               </button>
-            )
-          )}
+          ))}
         </div>
       </div>
     );
