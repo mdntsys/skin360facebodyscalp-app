@@ -1,40 +1,49 @@
 "use client";
 
-// Schedule — the girls' page. A staff login lands here and nowhere else:
-// a read-only week of appointments, phone-first. RLS decides whether they
-// see just their own column or every girl's (app_settings switch); this
-// page just renders whatever rows come back and labels them.
+// Schedule — the girls' page. A staff login lands here and nowhere else.
+// They can book onto their own column (phone-ins). RLS still hides money,
+// forms, and other girls' days off. The sees-all switch only widens the
+// week view; this page renders whatever rows come back.
 
 import * as React from "react";
 import { addDays, addMinutes, format, isSameDay, isToday, startOfWeek } from "date-fns";
-import { CalendarDays, ChevronLeft, ChevronRight, MapPin } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, MapPin, Plus } from "lucide-react";
+import { toast } from "sonner";
 
-import { matchesLocation, useData, type Appointment } from "@/data";
+import {
+  matchesLocation,
+  useData,
+  type Appointment,
+} from "@/data";
 import { useLocationFilter } from "@/components/shell/location-context";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { NewAppointmentDialog } from "../appointments/_components/new-appointment-dialog";
 
 export default function SchedulePage() {
   const {
     appointments,
-    clientName,
     serviceById,
     staffById,
     roomById,
     locationById,
     profile,
     appSettings,
+    clientById,
+    clientName,
   } = useData();
   const { location } = useLocationFilter();
 
   const isStaff = profile?.access === "staff";
   const seesAll = !isStaff || appSettings.staffSeesAllSchedules;
   const myStaffId = profile?.staffId ?? null;
+  const canBook = Boolean(isStaff && myStaffId);
 
   const [anchor, setAnchor] = React.useState(() => new Date());
+  const [bookOpen, setBookOpen] = React.useState(false);
   const weekStart = startOfWeek(anchor, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -57,17 +66,41 @@ export default function SchedulePage() {
     "MMM d"
   )}`;
 
+  const handleBooked = React.useCallback(
+    (appt: Appointment) => {
+      const start = new Date(appt.startISO);
+      setAnchor(start);
+      const name = clientName(appt.clientId);
+      const when = format(start, "EEE, MMM d 'at' h:mm a");
+      const hasEmail = Boolean(clientById.get(appt.clientId)?.email?.trim());
+      toast.success(
+        hasEmail
+          ? `Booked ${name} · ${when}. Confirmation emailed.`
+          : `Booked ${name} · ${when}. No email on file — they didn't get a confirmation.`
+      );
+    },
+    [clientName, clientById]
+  );
+
   return (
     <>
       <PageHeader
         title={seesAll ? "Schedule" : "Your Schedule"}
         subtitle={
-          seesAll
-            ? "The week ahead for the whole team"
-            : "Your appointments for the week ahead"
+          canBook
+            ? "Your week — book a client when they call"
+            : seesAll
+              ? "The week ahead for the whole team"
+              : "Your appointments for the week ahead"
         }
         actions={
           <div className="flex items-center gap-1.5">
+            {canBook && (
+              <Button onClick={() => setBookOpen(true)}>
+                <Plus data-icon="inline-start" strokeWidth={1.75} />
+                Book
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -179,6 +212,16 @@ export default function SchedulePage() {
             </div>
           )}
         </div>
+      )}
+
+      {canBook && myStaffId && (
+        <NewAppointmentDialog
+          open={bookOpen}
+          onOpenChange={setBookOpen}
+          defaultLocation={location}
+          lockedStaffId={myStaffId}
+          onCreate={handleBooked}
+        />
       )}
     </>
   );

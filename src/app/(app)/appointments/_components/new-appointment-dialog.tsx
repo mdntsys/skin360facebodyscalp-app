@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { format, parse } from "date-fns";
-import { AlertTriangle, Sparkles } from "lucide-react";
+import { AlertTriangle, Sparkles, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -88,6 +88,7 @@ export function NewAppointmentDialog({
   onCreate,
   appointment,
   onUpdate,
+  lockedStaffId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -95,6 +96,8 @@ export function NewAppointmentDialog({
   onCreate: (appt: Appointment) => void;
   appointment?: Appointment | null;
   onUpdate?: (appt: Appointment) => void;
+  /** Staff logins book onto their own column only. */
+  lockedStaffId?: string;
 }) {
   const {
     clients,
@@ -104,6 +107,7 @@ export function NewAppointmentDialog({
     serviceById,
     createAppointment,
     updateAppointment,
+    createClient,
     appointments,
     timeBlocks,
     availabilityRules,
@@ -111,6 +115,9 @@ export function NewAppointmentDialog({
     rooms,
   } = useData();
   const editing = Boolean(appointment);
+  const lockedStaff = lockedStaffId
+    ? staff.find((s) => s.id === lockedStaffId)
+    : undefined;
 
   const [clientId, setClientId] = React.useState("");
   const [serviceId, setServiceId] = React.useState("");
@@ -121,8 +128,27 @@ export function NewAppointmentDialog({
   const [roomId, setRoomId] = React.useState(NO_ROOM);
   const [note, setNote] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
+  const [addingClient, setAddingClient] = React.useState(false);
+  const [newFirst, setNewFirst] = React.useState("");
+  const [newLast, setNewLast] = React.useState("");
+  const [newPhone, setNewPhone] = React.useState("");
+  const [newEmail, setNewEmail] = React.useState("");
+  const [savingClient, setSavingClient] = React.useState(false);
   // True once the front desk picks a room by hand — auto-suggestion then backs off.
   const roomTouchedRef = React.useRef(false);
+
+  const locationChoices = lockedStaff
+    ? locations.filter((l) => lockedStaff.locations.includes(l.id))
+    : locations;
+
+  function defaultLocationId(): LocationId {
+    const preferred =
+      defaultLocation === "all" ? undefined : defaultLocation;
+    if (preferred && locationChoices.some((l) => l.id === preferred)) {
+      return preferred;
+    }
+    return locationChoices[0]?.id ?? "valencia";
+  }
 
   // Fresh form each time the dialog opens — prefill when editing.
   React.useEffect(() => {
@@ -141,16 +167,23 @@ export function NewAppointmentDialog({
     } else {
       setClientId("");
       setServiceId("");
-      setStaffId("");
-      setLocationId(defaultLocation === "all" ? "toluca" : defaultLocation);
+      setStaffId(lockedStaffId ?? "");
+      setLocationId(defaultLocationId());
       setDate(format(new Date(), "yyyy-MM-dd"));
       setTime("10:00");
       setRoomId(NO_ROOM);
       roomTouchedRef.current = false;
       setNote("");
     }
+    setAddingClient(false);
+    setNewFirst("");
+    setNewLast("");
+    setNewPhone("");
+    setNewEmail("");
     setSubmitting(false);
-  }, [open, defaultLocation, appointment]);
+    // defaultLocationId reads locationChoices from locked staff.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultLocation, appointment, lockedStaffId]);
 
   const sortedClients = React.useMemo(
     () =>
@@ -161,17 +194,29 @@ export function NewAppointmentDialog({
       ),
     [clients]
   );
-  const serviceGroups = React.useMemo(() => groupServices(services), [services]);
+  const scopedServices = React.useMemo(() => {
+    const active = services.filter((s) => s.active !== false);
+    if (!lockedStaff || lockedStaff.serviceIds.length === 0) return active;
+    return active.filter((s) => lockedStaff.serviceIds.includes(s.id));
+  }, [services, lockedStaff]);
+  const serviceGroups = React.useMemo(
+    () => groupServices(scopedServices),
+    [scopedServices]
+  );
 
   const staffOptions = staff.filter(
     (s) =>
+      (!lockedStaffId || s.id === lockedStaffId) &&
       s.locations.includes(locationId) &&
       (!serviceId ||
         s.serviceIds.length === 0 ||
         s.serviceIds.includes(serviceId))
   );
   const service = serviceById.get(serviceId);
-  const canSubmit = Boolean(clientId && serviceId && staffId && date && time);
+  const performerId = lockedStaffId ?? staffId;
+  const canSubmit = Boolean(
+    clientId && serviceId && performerId && date && time && !addingClient
+  );
 
   const schedulingCtx = React.useMemo<SchedulingContext>(
     () => ({
@@ -221,18 +266,18 @@ export function NewAppointmentDialog({
       : (service?.price ?? 0);
 
   const draft = React.useMemo<DraftAppointment | null>(() => {
-    if (!service || !staffId || !startISO) return null;
+    if (!service || !performerId || !startISO) return null;
     return {
       locationId,
       serviceId,
-      staffId,
+      staffId: performerId,
       startISO,
       durationMin,
       excludeAppointmentId: appointment?.id,
     };
   }, [
     service,
-    staffId,
+    performerId,
     startISO,
     locationId,
     serviceId,
@@ -278,6 +323,38 @@ export function NewAppointmentDialog({
     if (chosen && !chosen.locations.includes(next)) setStaffId("");
   };
 
+  const handleSaveNewClient = async () => {
+    const first = newFirst.trim();
+    const last = newLast.trim();
+    if (!first || !last || savingClient) return;
+    setSavingClient(true);
+    try {
+      const created = await createClient({
+        firstName: first,
+        lastName: last,
+        email: newEmail.trim() || undefined,
+        phone: newPhone.trim() || undefined,
+        homeLocation: locationId,
+        tags: [],
+      });
+      setClientId(created.id);
+      setAddingClient(false);
+      setNewFirst("");
+      setNewLast("");
+      setNewPhone("");
+      setNewEmail("");
+      toast.success(`${first} ${last} added.`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Couldn't add the client. Please try again."
+      );
+    } finally {
+      setSavingClient(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canSubmit || !service || submitting) return;
@@ -286,7 +363,7 @@ export function NewAppointmentDialog({
     const payload = {
       clientId,
       serviceId,
-      staffId,
+      staffId: performerId,
       locationId,
       startISO: start.toISOString(),
       durationMin,
@@ -324,27 +401,80 @@ export function NewAppointmentDialog({
           <DialogDescription className="text-sm font-light text-muted-warm">
             {editing
               ? "Change the time, service, or who it's with — it updates on the calendar right away."
-              : "Book a service for a client — it appears on the calendar right away and they get a confirmation email."}
+              : lockedStaffId
+                ? "Book a client onto your schedule. They get a confirmation email if there's an email on file."
+                : "Book a service for a client — it appears on the calendar right away and they get a confirmation email."}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5 px-6 py-6">
           <div className="space-y-2">
-            <Label htmlFor="appt-client" className={LABEL_CLASSES}>
-              Client
-            </Label>
-            <Select value={clientId} onValueChange={setClientId}>
-              <SelectTrigger id="appt-client" className={TRIGGER_CLASSES}>
-                <SelectValue placeholder="Select a client" />
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {sortedClients.map((c) => (
-                  <SelectItem key={c.id} value={c.id} className="text-sm">
-                    {c.firstName} {c.lastName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="appt-client" className={LABEL_CLASSES}>
+                Client
+              </Label>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-xs font-normal text-gold-700 hover:text-gold-800"
+                onClick={() => setAddingClient((v) => !v)}
+              >
+                <UserPlus className="size-3.5" strokeWidth={1.75} />
+                {addingClient ? "Pick existing" : "New client"}
+              </button>
+            </div>
+            {addingClient ? (
+              <div className="space-y-3 rounded-2xl border border-line bg-ivory/40 p-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Input
+                    value={newFirst}
+                    onChange={(e) => setNewFirst(e.target.value)}
+                    placeholder="First name"
+                    className="h-11 rounded-full border-line bg-white px-4 text-sm"
+                  />
+                  <Input
+                    value={newLast}
+                    onChange={(e) => setNewLast(e.target.value)}
+                    placeholder="Last name"
+                    className="h-11 rounded-full border-line bg-white px-4 text-sm"
+                  />
+                </div>
+                <Input
+                  type="tel"
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  placeholder="Phone"
+                  className="h-11 rounded-full border-line bg-white px-4 text-sm"
+                />
+                <Input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="Email (optional — for the confirmation)"
+                  className="h-11 rounded-full border-line bg-white px-4 text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!newFirst.trim() || !newLast.trim() || savingClient}
+                  onClick={() => void handleSaveNewClient()}
+                >
+                  {savingClient ? "Saving…" : "Save client"}
+                </Button>
+              </div>
+            ) : (
+              <Select value={clientId} onValueChange={setClientId}>
+                <SelectTrigger id="appt-client" className={TRIGGER_CLASSES}>
+                  <SelectValue placeholder="Select a client" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  {sortedClients.map((c) => (
+                    <SelectItem key={c.id} value={c.id} className="text-sm">
+                      {c.firstName} {c.lastName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -421,45 +551,57 @@ export function NewAppointmentDialog({
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="appt-staff" className={LABEL_CLASSES}>
-                Staff
-              </Label>
-              <Select value={staffId} onValueChange={setStaffId}>
-                <SelectTrigger id="appt-staff" className={TRIGGER_CLASSES}>
-                  <SelectValue placeholder="Select staff" />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  {staffOptions.map((s) => (
-                    <SelectItem key={s.id} value={s.id} className="text-sm">
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="size-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: s.color }}
-                        />
-                        {s.name}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
+            {!lockedStaffId && (
+              <div className="space-y-2">
+                <Label htmlFor="appt-staff" className={LABEL_CLASSES}>
+                  Staff
+                </Label>
+                <Select value={staffId} onValueChange={setStaffId}>
+                  <SelectTrigger id="appt-staff" className={TRIGGER_CLASSES}>
+                    <SelectValue placeholder="Select staff" />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    {staffOptions.map((s) => (
+                      <SelectItem key={s.id} value={s.id} className="text-sm">
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="size-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: s.color }}
+                          />
+                          {s.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div
+              className={
+                lockedStaffId ? "space-y-2 sm:col-span-2" : "space-y-2"
+              }
+            >
               <Label htmlFor="appt-location" className={LABEL_CLASSES}>
                 Location
               </Label>
-              <Select value={locationId} onValueChange={handleLocationChange}>
-                <SelectTrigger id="appt-location" className={TRIGGER_CLASSES}>
-                  <SelectValue placeholder="Select location" />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  {locations.map((l) => (
-                    <SelectItem key={l.id} value={l.id} className="text-sm">
-                      {l.shortName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {locationChoices.length <= 1 ? (
+                <p className="flex h-11 items-center px-1 text-sm text-ink">
+                  {locationChoices[0]?.shortName ?? "Valencia"}
+                </p>
+              ) : (
+                <Select value={locationId} onValueChange={handleLocationChange}>
+                  <SelectTrigger id="appt-location" className={TRIGGER_CLASSES}>
+                    <SelectValue placeholder="Select location" />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    {locationChoices.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.shortName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
 

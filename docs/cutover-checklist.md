@@ -61,9 +61,10 @@ Fridays"): Tue/Wed/Thu 10–6 + Sat 9–4, Valencia — the standard girl patter
 minus Mon/Fri. If her hours differ, Carolina can fix them on the
 Availability page herself.
 
-Staff logins see the read-only `/schedule` page and nothing else — RLS locks
-money, clients, and forms to admin logins, and every table write is
-admin-only, so a girl's login is view-only even against the raw API.
+Staff logins see `/schedule` and can book onto **their own column** (phone
+bookings). RLS still locks money, forms, and other girls' columns; client
+**read** is allowed for booking, and staff may **insert** a new client plus
+an appointment where `staff_id = my_staff_id()`. Days off stay Carolina-only.
 Carolina's and Nic's existing logins are `access = 'admin'` — unchanged.
 
 **GoFormz history migration: NOT NEEDED** (Carolina 2026-08-14 — the ~100
