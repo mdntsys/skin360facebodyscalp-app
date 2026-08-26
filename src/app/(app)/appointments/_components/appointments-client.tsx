@@ -45,7 +45,8 @@ export function AppointmentsClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { location } = useLocationFilter();
-  const { appointments, clientName, updateAppointmentStatus } = useData();
+  const { appointments, clientName, clientById, updateAppointmentStatus } =
+    useData();
 
   const [view, setView] = React.useState<ViewMode>("day");
   const [selectedDate, setSelectedDate] = React.useState(() => new Date());
@@ -127,14 +128,16 @@ export function AppointmentsClient() {
     (appt: Appointment) => {
       const start = new Date(appt.startISO);
       setSelectedDate(start);
+      const name = clientName(appt.clientId);
+      const when = format(start, "EEE, MMM d 'at' h:mm a");
+      const hasEmail = Boolean(clientById.get(appt.clientId)?.email?.trim());
       toast.success(
-        `Appointment booked for ${clientName(appt.clientId)} · ${format(
-          start,
-          "EEE, MMM d 'at' h:mm a"
-        )}`
+        hasEmail
+          ? `Appointment booked for ${name} · ${when}. Confirmation emailed.`
+          : `Appointment booked for ${name} · ${when}. No email on file — they didn't get a confirmation.`
       );
     },
-    [clientName]
+    [clientName, clientById]
   );
 
   const handleUpdated = React.useCallback(

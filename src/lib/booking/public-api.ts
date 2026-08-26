@@ -33,6 +33,11 @@ import {
   type SchedulingContext,
 } from "../scheduling/engine";
 import { sendEmail } from "../email/send";
+import {
+  escapeHtml,
+  formatAppointmentWhen,
+  sendClientBookingConfirmation,
+} from "../email/confirmation";
 
 const LOCATION_ID: LocationId = "valencia";
 
@@ -367,60 +372,6 @@ export async function publicAvailability(args: {
 
 // --- Create ------------------------------------------------------------------
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function confirmationEmailHtml(rawArgs: {
-  firstName: string;
-  serviceName: string;
-  addonNames: string[];
-  startAt: string;
-  staffName: string;
-}): string {
-  // firstName arrives from the public booking form — escape everything.
-  const args = {
-    ...rawArgs,
-    firstName: escapeHtml(rawArgs.firstName),
-    serviceName: escapeHtml(rawArgs.serviceName),
-    staffName: escapeHtml(rawArgs.staffName),
-    addonNames: rawArgs.addonNames.map(escapeHtml),
-  };
-  const when = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(new Date(args.startAt));
-  return `
-  <div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:32px;background:#fdfbf6;color:#2b2723">
-    <p style="text-align:center;letter-spacing:4px;font-size:11px;color:#a67c34">SKIN 360 · FACE BODY SCALP</p>
-    <h1 style="text-align:center;font-weight:500">You're booked${args.firstName ? `, ${args.firstName}` : ""}</h1>
-    <div style="margin:24px auto;padding:20px;border:1px solid #ece3d3;border-radius:16px;background:#fff;text-align:center">
-      <p style="margin:0;font-size:16px">${args.serviceName}</p>
-      ${args.addonNames
-        .map(
-          (n) =>
-            `<p style="margin:4px 0 0;font-size:13px;color:#837a6d">+ ${n}</p>`
-        )
-        .join("")}
-      <p style="margin:8px 0 0;font-size:14px">${when}</p>
-      <p style="margin:8px 0 0;font-size:14px;color:#837a6d">with ${args.staffName}</p>
-    </div>
-    <p style="text-align:center;font-size:13px;color:#837a6d">
-      Skin 360, 24510 Town Center Dr Suite 170, Valencia CA<br/>
-      Need to change your appointment? Just reply to this email or call us.
-    </p>
-  </div>`;
-}
-
 export interface CreateBookingResult {
   bookingId: string;
   startAt: string;
@@ -538,37 +489,21 @@ export async function createPublicBooking(args: {
   const staffName =
     data.staff.find((s) => s.id === args.teamMemberId)?.name.split(" ")[0] ??
     "our team";
-  const when = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(new Date(result.startAt));
+  const when = formatAppointmentWhen(result.startAt);
   const addonLine =
     addons.length > 0 ? ` + ${addons.map((a) => a.name).join(", ")}` : "";
   const clientName = [args.customer.givenName, args.customer.familyName]
     .filter(Boolean)
     .join(" ");
-  const nicBcc = ["nic@midnitesystems.com"];
-  try {
-    await sendEmail({
-      to: args.customer.email,
-      subject: `You're booked — ${service.name}`,
-      html: confirmationEmailHtml({
-        firstName: args.customer.givenName,
-        serviceName: service.name,
-        addonNames: addons.map((a) => a.name),
-        startAt: result.startAt,
-        staffName,
-      }),
-      bcc: nicBcc,
-    });
-  } catch (err) {
-    console.error("booking confirmation email failed:", err);
-  }
+  await sendClientBookingConfirmation({
+    to: args.customer.email,
+    firstName: args.customer.givenName,
+    serviceName: service.name,
+    addonNames: addons.map((a) => a.name),
+    startAt: result.startAt,
+    staffName,
+    locationId: LOCATION_ID,
+  });
 
   // Salon copy so Carolina sees the booking without opening the app.
   // Default is the yahoo inbox replies already go to. Not a blast to the girls.

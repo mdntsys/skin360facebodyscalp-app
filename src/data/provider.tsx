@@ -510,6 +510,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         appointments: [...prev.appointments, created].sort(byStart),
       }));
+      // Best-effort — the appointment is on the calendar either way.
+      try {
+        const res = await fetch("/api/appointments/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ appointmentId: created.id }),
+        });
+        if (!res.ok) {
+          console.error("appointment confirmation email failed:", res.status);
+        }
+      } catch (err) {
+        console.error("appointment confirmation email failed:", err);
+      }
       return created;
     },
     [supabase]

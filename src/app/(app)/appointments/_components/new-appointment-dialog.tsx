@@ -324,7 +324,7 @@ export function NewAppointmentDialog({
           <DialogDescription className="text-sm font-light text-muted-warm">
             {editing
               ? "Change the time, service, or who it's with — it updates on the calendar right away."
-              : "Book a service for a client — it appears on the calendar right away."}
+              : "Book a service for a client — it appears on the calendar right away and they get a confirmation email."}
           </DialogDescription>
         </DialogHeader>
 
