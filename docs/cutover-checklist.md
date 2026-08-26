@@ -41,7 +41,7 @@ Carolina answered 2026-08-16: girls see **only their own schedule** (the
 
 | Girl | Email | staff_id |
 |---|---|---|
-| Cassie | cassiedhughes@icloud.com | staff-cassie |
+| Cassie | cassiedhughes@icloud.com | staff-cassie | nails + lash/brow/wax (2026-08-26) |
 | Dominique | dominique5805@att.net | staff-dom |
 | Veronica | veronicaalvarez12@gmail.com | staff-vero |
 | Karen | kaparedes@yahoo.com | staff-karen |
