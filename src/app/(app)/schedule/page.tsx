@@ -7,7 +7,14 @@
 
 import * as React from "react";
 import { addDays, addMinutes, format, isSameDay, isToday, startOfWeek } from "date-fns";
-import { CalendarDays, ChevronLeft, ChevronRight, MapPin, Plus } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  MapPin,
+  Plus,
+  StickyNote,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -21,6 +28,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { AppointmentDrawer } from "../appointments/_components/appointment-drawer";
 import { NewAppointmentDialog } from "../appointments/_components/new-appointment-dialog";
 
 export default function SchedulePage() {
@@ -44,6 +52,7 @@ export default function SchedulePage() {
 
   const [anchor, setAnchor] = React.useState(() => new Date());
   const [bookOpen, setBookOpen] = React.useState(false);
+  const [selected, setSelected] = React.useState<Appointment | null>(null);
   const weekStart = startOfWeek(anchor, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -193,6 +202,7 @@ export default function SchedulePage() {
                         locationName={
                           locationById.get(a.locationId)?.shortName
                         }
+                        onOpen={() => setSelected(a)}
                       />
                     ))}
                   </div>
@@ -213,6 +223,12 @@ export default function SchedulePage() {
           )}
         </div>
       )}
+
+      <AppointmentDrawer
+        appointment={selected}
+        onClose={() => setSelected(null)}
+        readOnly
+      />
 
       {canBook && myStaffId && (
         <NewAppointmentDialog
@@ -235,6 +251,7 @@ function ScheduleRow({
   staffMember,
   roomName,
   locationName,
+  onOpen,
 }: {
   appointment: Appointment;
   showStaff: boolean;
@@ -243,11 +260,16 @@ function ScheduleRow({
   staffMember?: { name: string; color: string };
   roomName?: string;
   locationName?: string;
+  onOpen: () => void;
 }) {
   const start = new Date(a.startISO);
   const end = addMinutes(start, a.durationMin);
   return (
-    <div className="flex items-center gap-4 px-5 py-3.5">
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-cream/60 focus-visible:bg-cream/60 focus-visible:outline-none"
+    >
       <div className="w-24 shrink-0 sm:w-32">
         <p className="text-sm text-ink tabular-nums">{format(start, "h:mm a")}</p>
         <p className="text-xs font-light text-muted-warm tabular-nums">
@@ -261,6 +283,12 @@ function ScheduleRow({
             .filter(Boolean)
             .join(" · ")}
         </p>
+        {a.note && (
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs font-light text-ink-soft italic">
+            <StickyNote className="size-3 shrink-0" strokeWidth={1.75} />
+            <span className="truncate">{a.note}</span>
+          </p>
+        )}
         {showStaff && staffMember && (
           <p className="mt-0.5 flex items-center gap-1.5 text-xs font-light text-muted-warm">
             <span
@@ -280,6 +308,6 @@ function ScheduleRow({
           </span>
         )}
       </div>
-    </div>
+    </button>
   );
 }

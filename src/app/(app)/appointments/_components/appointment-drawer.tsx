@@ -41,14 +41,18 @@ export function AppointmentDrawer({
   onClose,
   onUpdateStatus,
   onEdit,
+  readOnly = false,
 }: {
   appointment: Appointment | null;
   onClose: () => void;
-  onUpdateStatus: (id: string, status: AppointmentStatus) => void;
+  onUpdateStatus?: (id: string, status: AppointmentStatus) => void;
   onEdit?: (appt: Appointment) => void;
+  /** The girls' schedule opens this to read the note — no status buttons. */
+  readOnly?: boolean;
 }) {
   const { clientById, serviceById, staffById, locationById, roomById } =
     useData();
+  const updateStatus = readOnly ? undefined : onUpdateStatus;
 
   // Keep the last appointment rendered during the close animation.
   const lastRef = React.useRef<Appointment | null>(null);
@@ -141,12 +145,13 @@ export function AppointmentDrawer({
         </div>
 
         {/* Actions */}
+        {updateStatus && (
         <div className="space-y-2 border-t border-line bg-ivory/50 px-6 py-5">
           {appt.status === "confirmed" && (
             <>
               <Button
                 className="w-full"
-                onClick={() => onUpdateStatus(appt.id, "checked-in")}
+                onClick={() => updateStatus(appt.id, "checked-in")}
               >
                 <LogIn data-icon="inline-start" strokeWidth={1.75} />
                 Check In
@@ -154,7 +159,7 @@ export function AppointmentDrawer({
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={() => onUpdateStatus(appt.id, "completed")}
+                onClick={() => updateStatus(appt.id, "completed")}
               >
                 <Check data-icon="inline-start" strokeWidth={1.75} />
                 Mark Completed
@@ -162,7 +167,7 @@ export function AppointmentDrawer({
               <Button
                 variant="destructive"
                 className="w-full"
-                onClick={() => onUpdateStatus(appt.id, "cancelled")}
+                onClick={() => updateStatus(appt.id, "cancelled")}
               >
                 <X data-icon="inline-start" strokeWidth={1.75} />
                 Cancel Appointment
@@ -172,7 +177,7 @@ export function AppointmentDrawer({
           {appt.status === "checked-in" && (
             <Button
               className="w-full"
-              onClick={() => onUpdateStatus(appt.id, "completed")}
+              onClick={() => updateStatus(appt.id, "completed")}
             >
               <Check data-icon="inline-start" strokeWidth={1.75} />
               Mark Completed
@@ -190,6 +195,7 @@ export function AppointmentDrawer({
               </Button>
             )}
         </div>
+        )}
       </SheetContent>
     </Sheet>
   );
