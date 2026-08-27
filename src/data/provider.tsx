@@ -271,7 +271,7 @@ export interface DataContextValue extends Collections {
   updateAppointmentStatus: (
     id: string,
     status: AppointmentStatus
-  ) => Promise<void>;
+  ) => Promise<{ emailed: boolean; reason?: string }>;
   createClient: (input: NewClientInput) => Promise<Client>;
   updateClient: (id: string, input: Partial<NewClientInput>) => Promise<void>;
   addClientNote: (clientId: string, text: string) => Promise<ClientNote>;
@@ -572,6 +572,29 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           a.id === id ? { ...a, status: apptStatus } : a
         ),
       }));
+
+      // Tell the client it's off. Best-effort — the calendar is already right,
+      // and plenty of the older Valencia clients have no email on file.
+      if (apptStatus !== "cancelled") return { emailed: false };
+      try {
+        const res = await fetch("/api/appointments/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ appointmentId: id, kind: "cancelled" }),
+        });
+        if (!res.ok) {
+          console.error("cancellation email failed:", res.status);
+          return { emailed: false, reason: "send-failed" };
+        }
+        const json = (await res.json()) as {
+          sent?: boolean;
+          reason?: string;
+        };
+        return { emailed: Boolean(json.sent), reason: json.reason };
+      } catch (err) {
+        console.error("cancellation email failed:", err);
+        return { emailed: false, reason: "send-failed" };
+      }
     },
     [supabase]
   );

@@ -97,14 +97,12 @@ export default function SchedulePage() {
       const appt = appointments.find((a) => a.id === id);
       setSelected(null);
       try {
-        await updateAppointmentStatus(id, "cancelled");
+        const { emailed } = await updateAppointmentStatus(id, "cancelled");
+        const who = appt ? clientName(appt.clientId) : "Appointment";
         toast.success(
-          appt
-            ? `Cancelled ${clientName(appt.clientId)} · ${format(
-                new Date(appt.startISO),
-                "EEE, MMM d 'at' h:mm a"
-              )}`
-            : "Appointment cancelled"
+          emailed
+            ? `Cancelled ${who}. We emailed them.`
+            : `Cancelled ${who}. No email on file — give them a call.`
         );
       } catch {
         toast.error("Couldn't cancel that one — text Nic and he'll sort it.");

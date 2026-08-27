@@ -160,8 +160,8 @@ export function AppointmentDrawer({
               {confirmingCancel ? (
                 <>
                   <p className="pb-1 text-center text-sm font-light text-muted-warm">
-                    Cancel this one? It comes off your schedule. The client
-                    isn&apos;t told automatically — give them a call.
+                    Cancel this one? It comes off your schedule, and we&apos;ll
+                    email the client if we have their address.
                   </p>
                   <Button
                     variant="destructive"

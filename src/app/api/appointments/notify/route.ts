@@ -5,11 +5,17 @@ import {
   sendClientBookingConfirmation,
   staffFirstName,
 } from "@/lib/email/confirmation";
+import {
+  sendClientCancellationNotice,
+  sendSalonCancellationNotice,
+} from "@/lib/email/cancellation";
 
 export const dynamic = "force-dynamic";
 
 interface NotifyBody {
   appointmentId?: string;
+  /** "booked" is the confirmation. "cancelled" is the call-off notice. */
+  kind?: "booked" | "cancelled";
 }
 
 export async function POST(request: Request) {
@@ -27,6 +33,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
+  const kind = body.kind === "cancelled" ? "cancelled" : "booked";
   const appointmentId = body.appointmentId?.trim().slice(0, 100);
   if (!appointmentId) {
     return NextResponse.json({ error: "Missing appointment" }, { status: 400 });
@@ -40,15 +47,21 @@ export async function POST(request: Request) {
   if (apptError || !appt) {
     return NextResponse.json({ error: "Unknown appointment" }, { status: 404 });
   }
-  if (appt.status === "cancelled" || appt.status === "no-show") {
+  if (
+    kind === "booked" &&
+    (appt.status === "cancelled" || appt.status === "no-show")
+  ) {
     return NextResponse.json({ sent: false, reason: "not-active" });
+  }
+  if (kind === "cancelled" && appt.status !== "cancelled") {
+    return NextResponse.json({ sent: false, reason: "not-cancelled" });
   }
 
   const [{ data: client }, { data: service }, { data: staff }] =
     await Promise.all([
       supabase
         .from("clients")
-        .select("first_name, email")
+        .select("first_name, last_name, email, phone")
         .eq("id", appt.client_id)
         .single(),
       supabase.from("services").select("name").eq("id", appt.service_id).single(),
@@ -61,14 +74,56 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await sendClientBookingConfirmation({
+  const shared = {
     to: client.email ?? "",
     firstName: client.first_name ?? "",
     serviceName: service.name,
     startAt: appt.start_at,
     staffName: staffFirstName(staff?.name),
     locationId: appt.location_id,
-  });
+  };
+
+  if (kind === "cancelled") {
+    const result = await sendClientCancellationNotice(shared);
+
+    // Carolina already knows about the ones she cancels herself. Copy her
+    // only when a girl called it off from her own schedule.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("access, staff_id")
+      .eq("id", user.id)
+      .single();
+    if (profile?.access === "staff") {
+      const { data: canceller } = await supabase
+        .from("staff")
+        .select("name")
+        .eq("id", profile.staff_id)
+        .single();
+      await sendSalonCancellationNotice({
+        clientName:
+          [client.first_name, client.last_name].filter(Boolean).join(" ") ||
+          "A client",
+        clientEmail: client.email ?? undefined,
+        clientPhone: client.phone ?? undefined,
+        serviceName: service.name,
+        startAt: appt.start_at,
+        staffName: staffFirstName(staff?.name),
+        cancelledBy: canceller?.name ?? "a team member",
+        locationId: appt.location_id,
+      });
+    }
+
+    return NextResponse.json({
+      sent: result.sent,
+      reason: result.sent
+        ? undefined
+        : client.email?.includes("@")
+          ? "send-failed"
+          : "no-email",
+    });
+  }
+
+  const result = await sendClientBookingConfirmation(shared);
   return NextResponse.json({
     sent: result.sent,
     reason: result.sent
