@@ -42,6 +42,7 @@ export default function SchedulePage() {
     appSettings,
     clientById,
     clientName,
+    updateAppointmentStatus,
   } = useData();
   const { location } = useLocationFilter();
 
@@ -89,6 +90,27 @@ export default function SchedulePage() {
       );
     },
     [clientName, clientById]
+  );
+
+  const handleCancel = React.useCallback(
+    async (id: string) => {
+      const appt = appointments.find((a) => a.id === id);
+      setSelected(null);
+      try {
+        await updateAppointmentStatus(id, "cancelled");
+        toast.success(
+          appt
+            ? `Cancelled ${clientName(appt.clientId)} · ${format(
+                new Date(appt.startISO),
+                "EEE, MMM d 'at' h:mm a"
+              )}`
+            : "Appointment cancelled"
+        );
+      } catch {
+        toast.error("Couldn't cancel that one — text Nic and he'll sort it.");
+      }
+    },
+    [appointments, clientName, updateAppointmentStatus]
   );
 
   return (
@@ -227,7 +249,14 @@ export default function SchedulePage() {
       <AppointmentDrawer
         appointment={selected}
         onClose={() => setSelected(null)}
-        readOnly
+        // Only her own column. With the sees-all switch on she can read
+        // another girl's row, and RLS would reject cancelling it anyway.
+        onUpdateStatus={
+          selected && (!isStaff || selected.staffId === myStaffId)
+            ? (id) => handleCancel(id)
+            : undefined
+        }
+        mode="cancel-only"
       />
 
       {canBook && myStaffId && (

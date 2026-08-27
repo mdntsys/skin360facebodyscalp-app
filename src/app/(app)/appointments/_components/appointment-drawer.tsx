@@ -41,18 +41,27 @@ export function AppointmentDrawer({
   onClose,
   onUpdateStatus,
   onEdit,
-  readOnly = false,
+  mode = "full",
 }: {
   appointment: Appointment | null;
   onClose: () => void;
   onUpdateStatus?: (id: string, status: AppointmentStatus) => void;
   onEdit?: (appt: Appointment) => void;
-  /** The girls' schedule opens this to read the note — no status buttons. */
-  readOnly?: boolean;
+  /**
+   * "full" is Carolina's calendar. "cancel-only" is a girl opening her own
+   * schedule: read the note, and cancel if the client called her directly.
+   */
+  mode?: "full" | "cancel-only";
 }) {
   const { clientById, serviceById, staffById, locationById, roomById } =
     useData();
-  const updateStatus = readOnly ? undefined : onUpdateStatus;
+  const updateStatus = onUpdateStatus;
+  const [confirmingCancel, setConfirmingCancel] = React.useState(false);
+
+  // Drop back out of "are you sure" when the sheet closes or moves on.
+  React.useEffect(() => {
+    if (!appointment) setConfirmingCancel(false);
+  }, [appointment?.id, appointment]);
 
   // Keep the last appointment rendered during the close animation.
   const lastRef = React.useRef<Appointment | null>(null);
@@ -145,56 +154,94 @@ export function AppointmentDrawer({
         </div>
 
         {/* Actions */}
-        {updateStatus && (
-        <div className="space-y-2 border-t border-line bg-ivory/50 px-6 py-5">
-          {appt.status === "confirmed" && (
-            <>
+        {updateStatus && mode === "cancel-only" &&
+          (appt.status === "confirmed" || appt.status === "checked-in") && (
+            <div className="space-y-2 border-t border-line bg-ivory/50 px-6 py-5">
+              {confirmingCancel ? (
+                <>
+                  <p className="pb-1 text-center text-sm font-light text-muted-warm">
+                    Cancel this one? It comes off your schedule. The client
+                    isn&apos;t told automatically — give them a call.
+                  </p>
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    onClick={() => updateStatus(appt.id, "cancelled")}
+                  >
+                    <X data-icon="inline-start" strokeWidth={1.75} />
+                    Yes, cancel it
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setConfirmingCancel(false)}
+                  >
+                    Keep it
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="destructive"
+                  className="w-full"
+                  onClick={() => setConfirmingCancel(true)}
+                >
+                  <X data-icon="inline-start" strokeWidth={1.75} />
+                  Cancel Appointment
+                </Button>
+              )}
+            </div>
+          )}
+
+        {updateStatus && mode === "full" && (
+          <div className="space-y-2 border-t border-line bg-ivory/50 px-6 py-5">
+            {appt.status === "confirmed" && (
+              <>
+                <Button
+                  className="w-full"
+                  onClick={() => updateStatus(appt.id, "checked-in")}
+                >
+                  <LogIn data-icon="inline-start" strokeWidth={1.75} />
+                  Check In
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => updateStatus(appt.id, "completed")}
+                >
+                  <Check data-icon="inline-start" strokeWidth={1.75} />
+                  Mark Completed
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="w-full"
+                  onClick={() => updateStatus(appt.id, "cancelled")}
+                >
+                  <X data-icon="inline-start" strokeWidth={1.75} />
+                  Cancel Appointment
+                </Button>
+              </>
+            )}
+            {appt.status === "checked-in" && (
               <Button
-                className="w-full"
-                onClick={() => updateStatus(appt.id, "checked-in")}
-              >
-                <LogIn data-icon="inline-start" strokeWidth={1.75} />
-                Check In
-              </Button>
-              <Button
-                variant="outline"
                 className="w-full"
                 onClick={() => updateStatus(appt.id, "completed")}
               >
                 <Check data-icon="inline-start" strokeWidth={1.75} />
                 Mark Completed
               </Button>
-              <Button
-                variant="destructive"
-                className="w-full"
-                onClick={() => updateStatus(appt.id, "cancelled")}
-              >
-                <X data-icon="inline-start" strokeWidth={1.75} />
-                Cancel Appointment
-              </Button>
-            </>
-          )}
-          {appt.status === "checked-in" && (
-            <Button
-              className="w-full"
-              onClick={() => updateStatus(appt.id, "completed")}
-            >
-              <Check data-icon="inline-start" strokeWidth={1.75} />
-              Mark Completed
-            </Button>
-          )}
-          {(appt.status === "confirmed" || appt.status === "checked-in") &&
-            onEdit && (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => onEdit(appt)}
-              >
-                <Pencil data-icon="inline-start" strokeWidth={1.75} />
-                Edit Appointment
-              </Button>
             )}
-        </div>
+            {(appt.status === "confirmed" || appt.status === "checked-in") &&
+              onEdit && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => onEdit(appt)}
+                >
+                  <Pencil data-icon="inline-start" strokeWidth={1.75} />
+                  Edit Appointment
+                </Button>
+              )}
+          </div>
         )}
       </SheetContent>
     </Sheet>
