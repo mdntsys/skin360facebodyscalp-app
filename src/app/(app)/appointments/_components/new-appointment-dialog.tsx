@@ -659,7 +659,9 @@ export function NewAppointmentDialog({
                     className="mt-0.5 size-3.5 shrink-0"
                     strokeWidth={1.75}
                   />
-                  {c.message}
+                  {lockedStaffId && c.kind === "staff-busy"
+                    ? "You already have something booked at this time."
+                    : c.message}
                 </p>
               ))}
               <p className="pl-[22px] text-[11px] font-light text-amber-700/80">

@@ -69,6 +69,24 @@ export default function SchedulePage() {
     [appointments, location, seesAll, myStaffId]
   );
 
+  // `visible` is everything she can see, not just this week. Karen booked two
+  // weeks out, looked at the current week, saw nothing and thought the app was
+  // stale — so tell her what sits outside the week she's looking at.
+  const weekEnd = addDays(weekStart, 7);
+  const inWeek = React.useMemo(
+    () =>
+      visible.filter((a) => {
+        const d = new Date(a.startISO);
+        return d >= weekStart && d < weekEnd;
+      }),
+    [visible, weekStart, weekEnd]
+  );
+  const laterOn = React.useMemo(
+    () => visible.filter((a) => new Date(a.startISO) >= weekEnd),
+    [visible, weekEnd]
+  );
+  const nextUp = laterOn[0];
+
   const unlinked = isStaff && !myStaffId && !seesAll;
 
   const weekLabel = `${format(weekStart, "MMM d")} – ${format(
@@ -230,16 +248,38 @@ export default function SchedulePage() {
               </Card>
             );
           })}
-          {visible.length === 0 && (
+          {inWeek.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-6 text-center">
               <CalendarDays
                 className="size-5 text-muted-warm"
                 strokeWidth={1.75}
               />
               <p className="text-sm font-light text-muted-warm">
-                Nothing booked this week yet.
+                Nothing booked this week.
               </p>
             </div>
+          )}
+          {nextUp && (
+            <Card className="border-gold-200 bg-gold-50/50 shadow-xs">
+              <CardContent className="flex flex-col items-center gap-3 px-6 py-5 text-center sm:flex-row sm:justify-between sm:text-left">
+                <p className="text-sm font-light text-ink-soft">
+                  {laterOn.length === 1
+                    ? "1 more appointment after this week"
+                    : `${laterOn.length} more appointments after this week`}
+                  {" — next is "}
+                  <span className="text-ink">
+                    {format(new Date(nextUp.startISO), "EEE, MMM d 'at' h:mm a")}
+                  </span>
+                </p>
+                <Button
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => setAnchor(new Date(nextUp.startISO))}
+                >
+                  Go to it
+                </Button>
+              </CardContent>
+            </Card>
           )}
         </div>
       )}
