@@ -198,6 +198,7 @@ function TeamMemberRow({ member }: { member: StaffMember }) {
   const { serviceById, locationById, updateStaff } = useData();
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [savingOnline, setSavingOnline] = React.useState(false);
+  const [savingNotify, setSavingNotify] = React.useState(false);
 
   const capabilityLabel =
     member.serviceIds.length === 0
@@ -271,6 +272,34 @@ function TeamMemberRow({ member }: { member: StaffMember }) {
             }}
           />
           Show online
+        </label>
+      )}
+      {member.bookable && (
+        <label className="flex shrink-0 items-center gap-2 text-xs font-light text-ink-soft">
+          <Switch
+            checked={member.notifyByEmail === true}
+            disabled={savingNotify || !member.email?.trim()}
+            onCheckedChange={async (checked) => {
+              setSavingNotify(true);
+              try {
+                await updateStaff(member.id, { notifyByEmail: checked });
+                toast.success(
+                  checked
+                    ? `${member.name} will get an email for new appointments.`
+                    : `${member.name} won't get appointment emails.`
+                );
+              } catch (err) {
+                toast.error(
+                  err instanceof Error
+                    ? err.message
+                    : "Couldn't update email notifications."
+                );
+              } finally {
+                setSavingNotify(false);
+              }
+            }}
+          />
+          Email her bookings
         </label>
       )}
       {member.bookable && (

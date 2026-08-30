@@ -9,6 +9,7 @@ import {
   sendClientCancellationNotice,
   sendSalonCancellationNotice,
 } from "@/lib/email/cancellation";
+import { sendStaffBookingNotice } from "@/lib/email/staff-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
 
   const { data: appt, error: apptError } = await supabase
     .from("appointments")
-    .select("id, client_id, service_id, staff_id, location_id, start_at, status")
+    .select("id, client_id, service_id, staff_id, location_id, start_at, status, note")
     .eq("id", appointmentId)
     .single();
   if (apptError || !appt) {
@@ -124,6 +125,30 @@ export async function POST(request: Request) {
   }
 
   const result = await sendClientBookingConfirmation(shared);
+
+  // Tell the girl too, unless she's the one who just booked it.
+  const { data: booker } = await supabase
+    .from("profiles")
+    .select("staff_id")
+    .eq("id", user.id)
+    .single();
+  if (booker?.staff_id !== appt.staff_id) {
+    await sendStaffBookingNotice({
+      staffId: appt.staff_id,
+      staffName: staffFirstName(staff?.name),
+      serviceName: service.name,
+      startAt: appt.start_at,
+      clientName:
+        [client.first_name, client.last_name].filter(Boolean).join(" ") ||
+        "A client",
+      clientEmail: client.email ?? undefined,
+      clientPhone: client.phone ?? undefined,
+      note: appt.note ?? undefined,
+      locationId: appt.location_id,
+      bookedVia: "salon",
+    });
+  }
+
   return NextResponse.json({
     sent: result.sent,
     reason: result.sent

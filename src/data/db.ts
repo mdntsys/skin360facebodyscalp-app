@@ -99,6 +99,7 @@ export interface StaffRow {
   phone: string;
   bookable: boolean;
   online_bookable?: boolean;
+  notify_by_email?: boolean;
   employment_type: string | null;
   service_ids: string[] | null;
 }
@@ -115,6 +116,7 @@ export function mapStaff(r: StaffRow): StaffMember {
     phone: r.phone,
     bookable: r.bookable,
     onlineBookable: r.online_bookable !== false,
+    notifyByEmail: r.notify_by_email === true,
     employmentType: (r.employment_type ??
       "employee") as StaffMember["employmentType"],
     serviceIds: r.service_ids ?? [],

@@ -300,6 +300,7 @@ export interface DataContextValue extends Collections {
       serviceIds?: string[];
       bookable?: boolean;
       onlineBookable?: boolean;
+      notifyByEmail?: boolean;
       employmentType?: EmploymentType;
     }
   ) => Promise<void>;
@@ -1010,6 +1011,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         serviceIds?: string[];
         bookable?: boolean;
         onlineBookable?: boolean;
+        notifyByEmail?: boolean;
         employmentType?: EmploymentType;
       }
     ) => {
@@ -1018,6 +1020,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (input.bookable !== undefined) patch.bookable = input.bookable;
       if (input.onlineBookable !== undefined)
         patch.online_bookable = input.onlineBookable;
+      if (input.notifyByEmail !== undefined)
+        patch.notify_by_email = input.notifyByEmail;
       if (input.employmentType !== undefined)
         patch.employment_type = input.employmentType;
       const { data: row, error } = await supabase

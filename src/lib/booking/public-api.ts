@@ -38,6 +38,7 @@ import {
   formatAppointmentWhen,
   sendClientBookingConfirmation,
 } from "../email/confirmation";
+import { sendStaffBookingNotice } from "../email/staff-notify";
 
 const LOCATION_ID: LocationId = "valencia";
 
@@ -538,6 +539,21 @@ export async function createPublicBooking(args: {
   } catch (err) {
     console.error("salon booking notify failed:", err);
   }
+
+  // And the girl whose column it landed on, if Carolina switched her on.
+  await sendStaffBookingNotice({
+    staffId: args.teamMemberId,
+    staffName: staffName,
+    serviceName: service.name,
+    addonNames: addons.map((a) => a.name),
+    startAt: result.startAt,
+    clientName: clientName,
+    clientEmail: args.customer.email,
+    clientPhone: args.customer.phone,
+    note: args.note,
+    locationId: LOCATION_ID,
+    bookedVia: "online",
+  });
 
   return result;
 }
