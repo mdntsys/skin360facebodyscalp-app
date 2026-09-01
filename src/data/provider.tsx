@@ -146,8 +146,8 @@ export interface NewClientInput {
   phone?: string;
   tags?: ClientTag[];
   homeLocation: LocationId;
-  birthday?: string;
-  skinNotes?: string;
+  birthday?: string | null;
+  skinNotes?: string | null;
 }
 
 export interface ProductInput {
@@ -607,12 +607,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         .insert({
           first_name: input.firstName,
           last_name: input.lastName,
-          email: input.email ?? "",
-          phone: input.phone ?? "",
+          email: input.email?.trim() ?? "",
+          phone: input.phone?.trim() ?? "",
           tags: input.tags ?? [],
           home_location: input.homeLocation,
-          birthday: input.birthday ?? null,
-          skin_notes: input.skinNotes ?? null,
+          birthday: input.birthday?.trim() ? input.birthday.trim() : null,
+          skin_notes: input.skinNotes?.trim() ? input.skinNotes.trim() : null,
         })
         .select()
         .single();
@@ -634,12 +634,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const patch: Record<string, unknown> = {};
       if (input.firstName !== undefined) patch.first_name = input.firstName;
       if (input.lastName !== undefined) patch.last_name = input.lastName;
-      if (input.email !== undefined) patch.email = input.email;
-      if (input.phone !== undefined) patch.phone = input.phone;
+      if (input.email !== undefined) patch.email = input.email.trim();
+      if (input.phone !== undefined) patch.phone = input.phone.trim();
       if (input.tags !== undefined) patch.tags = input.tags;
       if (input.homeLocation !== undefined) patch.home_location = input.homeLocation;
-      if (input.birthday !== undefined) patch.birthday = input.birthday;
-      if (input.skinNotes !== undefined) patch.skin_notes = input.skinNotes;
+      if (input.birthday !== undefined)
+        patch.birthday = input.birthday?.trim() ? input.birthday.trim() : null;
+      if (input.skinNotes !== undefined)
+        patch.skin_notes = input.skinNotes?.trim() ? input.skinNotes.trim() : null;
       const { data: row, error } = await supabase
         .from("clients")
         .update(patch)

@@ -11,11 +11,9 @@ import {
   DollarSign,
   Heart,
   Mail,
-  PencilLine,
   Phone,
   UserX,
 } from "lucide-react";
-import { toast } from "sonner";
 
 import { formatCurrency, useData } from "@/data";
 import { StatCard } from "@/components/shared/stat-card";
@@ -28,6 +26,7 @@ import {
 } from "@/components/ui/tabs";
 import { AppointmentsTab } from "../_components/appointments-tab";
 import { ClientAvatar } from "../_components/client-avatar";
+import { EditClientDialog } from "../_components/edit-client-dialog";
 import { EmptyState } from "../_components/empty-state";
 import { IntakeFormsTab } from "../_components/intake-forms-tab";
 import { MembershipsTab } from "../_components/memberships-tab";
@@ -136,13 +135,7 @@ export default function ClientDetailPage({
                 Book Appointment
               </Link>
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => toast("Profile editing is coming soon")}
-            >
-              <PencilLine data-icon="inline-start" strokeWidth={1.75} />
-              Edit Profile
-            </Button>
+            <EditClientDialog client={client} />
           </div>
         </div>
         <div className="gold-rule mt-5" />

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import {
   Cake,
   CalendarPlus,
@@ -20,6 +20,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
+function formatBirthday(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return format(parseISO(value.slice(0, 10)), "MMMM d");
+  }
+  return value;
+}
 
 export function OverviewTab({ client }: { client: Client }) {
   const { appointments, locationById, serviceById, staffById } = useData();
@@ -41,7 +48,13 @@ export function OverviewTab({ client }: { client: Client }) {
     { icon: Phone, label: "Phone", value: client.phone || "—" },
     { icon: Mail, label: "Email", value: client.email || "—" },
     ...(client.birthday
-      ? [{ icon: Cake, label: "Birthday", value: client.birthday }]
+      ? [
+          {
+            icon: Cake,
+            label: "Birthday",
+            value: formatBirthday(client.birthday),
+          },
+        ]
       : []),
     { icon: MapPin, label: "Home Location", value: home?.name ?? "—" },
   ];
