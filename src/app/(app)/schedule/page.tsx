@@ -95,12 +95,24 @@ export default function SchedulePage() {
   )}`;
 
   const handleBooked = React.useCallback(
-    (appt: Appointment) => {
+    (appt: Appointment, series?: { booked: number; skipped: number }) => {
       const start = new Date(appt.startISO);
       setAnchor(start);
       const name = clientName(appt.clientId);
       const when = format(start, "EEE, MMM d 'at' h:mm a");
       const hasEmail = Boolean(clientById.get(appt.clientId)?.email?.trim());
+      if (series && series.booked > 1) {
+        const skip =
+          series.skipped > 0
+            ? ` Skipped ${series.skipped} that did not fit.`
+            : "";
+        toast.success(
+          hasEmail
+            ? `Booked ${name} ${series.booked} times starting ${when}. Confirmation emailed for the first visit.${skip}`
+            : `Booked ${name} ${series.booked} times starting ${when}. No email on file.${skip}`
+        );
+        return;
+      }
       toast.success(
         hasEmail
           ? `Booked ${name} · ${when}. Confirmation emailed.`

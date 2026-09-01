@@ -19,6 +19,13 @@ import {
   type DraftAppointment,
   type SchedulingContext,
 } from "@/lib/scheduling/engine";
+import {
+  cadenceLabel,
+  expandRepeatStarts,
+  planRepeatOccurrences,
+  seriesNoteLine,
+  type RepeatUnit,
+} from "@/lib/scheduling/recurrence";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -38,6 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
 const TRIGGER_CLASSES =
@@ -72,6 +80,11 @@ for (let mins = 8 * 60; mins <= 19 * 60; mins += 15) {
   });
 }
 
+function parseISOSafe(iso: string): Date | null {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function timeSlotLabel(value: string): string {
   const existing = TIME_SLOTS.find((s) => s.value === value);
   if (existing) return existing.label;
@@ -93,7 +106,10 @@ export function NewAppointmentDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultLocation: LocationFilter;
-  onCreate: (appt: Appointment) => void;
+  onCreate: (
+    appt: Appointment,
+    series?: { booked: number; skipped: number }
+  ) => void;
   appointment?: Appointment | null;
   onUpdate?: (appt: Appointment) => void;
   /** Staff logins book onto their own column only. */
@@ -106,6 +122,7 @@ export function NewAppointmentDialog({
     locations,
     serviceById,
     createAppointment,
+    createAppointments,
     updateAppointment,
     createClient,
     appointments,
@@ -134,6 +151,10 @@ export function NewAppointmentDialog({
   const [newPhone, setNewPhone] = React.useState("");
   const [newEmail, setNewEmail] = React.useState("");
   const [savingClient, setSavingClient] = React.useState(false);
+  const [repeating, setRepeating] = React.useState(false);
+  const [repeatEvery, setRepeatEvery] = React.useState("1");
+  const [repeatUnit, setRepeatUnit] = React.useState<RepeatUnit>("week");
+  const [repeatUntil, setRepeatUntil] = React.useState("");
   // True once the front desk picks a room by hand — auto-suggestion then backs off.
   const roomTouchedRef = React.useRef(false);
 
@@ -164,6 +185,10 @@ export function NewAppointmentDialog({
       setRoomId(appointment.roomId ?? NO_ROOM);
       roomTouchedRef.current = true;
       setNote(appointment.note ?? "");
+      setRepeating(false);
+      setRepeatEvery("1");
+      setRepeatUnit("week");
+      setRepeatUntil("");
     } else {
       setClientId("");
       setServiceId("");
@@ -174,6 +199,10 @@ export function NewAppointmentDialog({
       setRoomId(NO_ROOM);
       roomTouchedRef.current = false;
       setNote("");
+      setRepeating(false);
+      setRepeatEvery("1");
+      setRepeatUnit("week");
+      setRepeatUntil("");
     }
     setAddingClient(false);
     setNewFirst("");
@@ -311,6 +340,40 @@ export function NewAppointmentDialog({
     return getConflicts(schedulingCtx, { ...draft, roomId: chosenRoomId });
   }, [schedulingCtx, draft, chosenRoomId]);
 
+  const repeatEveryN = Math.max(
+    1,
+    Math.min(12, Math.floor(Number(repeatEvery) || 1))
+  );
+
+  const repeatPlan = React.useMemo(() => {
+    if (editing || !repeating || !repeatUntil || !startISO || !draft) return null;
+    const first = parseISOSafe(startISO);
+    if (!first) return null;
+    const rule = {
+      every: repeatEveryN,
+      unit: repeatUnit,
+      untilDate: repeatUntil,
+    };
+    const { starts, truncated } = expandRepeatStarts(first, rule);
+    const { keep, skipped } = planRepeatOccurrences({
+      ctx: schedulingCtx,
+      draft,
+      starts,
+      preferredRoomId: chosenRoomId,
+    });
+    return { starts, truncated, keep, skipped, rule };
+  }, [
+    editing,
+    repeating,
+    repeatEveryN,
+    repeatUnit,
+    repeatUntil,
+    startISO,
+    draft,
+    schedulingCtx,
+    chosenRoomId,
+  ]);
+
   const handleRoomChange = (value: string) => {
     roomTouchedRef.current = true;
     setRoomId(value);
@@ -358,8 +421,19 @@ export function NewAppointmentDialog({
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canSubmit || !service || submitting) return;
+    if (repeating && !editing) {
+      if (!repeatUntil) {
+        toast.error("Pick an end date for the repeats.");
+        return;
+      }
+      if (repeatUntil < date) {
+        toast.error("The end date has to be on or after the first visit.");
+        return;
+      }
+    }
     const start = parse(`${date} ${time}`, "yyyy-MM-dd HH:mm", new Date());
     setSubmitting(true);
+    const userNote = note.trim() ? note.trim() : undefined;
     const payload = {
       clientId,
       serviceId,
@@ -368,13 +442,29 @@ export function NewAppointmentDialog({
       startISO: start.toISOString(),
       durationMin,
       price,
-      note: note.trim() ? note.trim() : undefined,
+      note: userNote,
       roomId: chosenRoomId ?? null,
     };
     try {
       if (appointment) {
         const updated = await updateAppointment(appointment.id, payload);
         onUpdate?.(updated);
+      } else if (repeatPlan && repeatPlan.keep.length > 1 && repeatPlan.rule) {
+        const tag = seriesNoteLine(repeatPlan.rule);
+        const seriesNote = userNote ? `${userNote}\n\n${tag}` : tag;
+        const inputs = repeatPlan.keep.map((occ) => ({
+          ...payload,
+          startISO: occ.startISO,
+          roomId: occ.roomId ?? null,
+          note: seriesNote,
+        }));
+        const created = await createAppointments(inputs);
+        if (created[0]) {
+          onCreate(created[0], {
+            booked: created.length,
+            skipped: repeatPlan.skipped.length,
+          });
+        }
       } else {
         const created = await createAppointment(payload);
         onCreate(created);
@@ -550,6 +640,89 @@ export function NewAppointmentDialog({
             </div>
           </div>
 
+          {!editing && (
+            <div className="space-y-3 rounded-2xl border border-line bg-ivory/40 px-4 py-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs tracking-wide uppercase text-muted-warm">
+                    Repeats
+                  </p>
+                  <p className="text-sm font-light text-ink">
+                    {repeating
+                      ? cadenceLabel(repeatEveryN, repeatUnit)
+                      : "Does not repeat"}
+                  </p>
+                </div>
+                <Switch
+                  checked={repeating}
+                  onCheckedChange={setRepeating}
+                  aria-label="Repeat this appointment"
+                />
+              </div>
+              {repeating && (
+                <div className="space-y-3 border-t border-line/70 pt-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="appt-repeat-every" className={LABEL_CLASSES}>
+                        Repeats every
+                      </Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="appt-repeat-every"
+                          type="number"
+                          min={1}
+                          max={12}
+                          value={repeatEvery}
+                          onChange={(e) => setRepeatEvery(e.target.value)}
+                          className="h-11 w-20 rounded-full border-line bg-white px-4 text-sm font-light focus-visible:border-gold-300"
+                        />
+                        <Select
+                          value={repeatUnit}
+                          onValueChange={(v) => setRepeatUnit(v as RepeatUnit)}
+                        >
+                          <SelectTrigger className={TRIGGER_CLASSES}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="day">Day</SelectItem>
+                            <SelectItem value="week">Week</SelectItem>
+                            <SelectItem value="month">Month</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="appt-repeat-until" className={LABEL_CLASSES}>
+                        End date
+                      </Label>
+                      <Input
+                        id="appt-repeat-until"
+                        type="date"
+                        min={date || undefined}
+                        value={repeatUntil}
+                        onChange={(e) => setRepeatUntil(e.target.value)}
+                        className="h-11 rounded-full border-line bg-white px-4 text-sm font-light focus-visible:border-gold-300 focus-visible:ring-gold-200/50"
+                      />
+                    </div>
+                  </div>
+                  {repeatPlan && repeatPlan.keep.length > 0 && (
+                    <p className="text-xs font-light text-muted-warm">
+                      {repeatPlan.keep.length === 1
+                        ? "Just the first visit lands on the calendar — later dates do not fit."
+                        : `${repeatPlan.keep.length} visits, ${cadenceLabel(repeatEveryN, repeatUnit)} through ${format(parse(repeatUntil, "yyyy-MM-dd", new Date()), "MMM d")}.`}
+                      {repeatPlan.skipped.length > 0
+                        ? ` Skipping ${repeatPlan.skipped.length} that ${repeatPlan.skipped.length === 1 ? "is" : "are"} already taken or she is off.`
+                        : ""}
+                      {repeatPlan.truncated
+                        ? " Stopped at 52 visits — book another series if you need to go longer."
+                        : ""}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid gap-5 sm:grid-cols-2">
             {!lockedStaffId && (
               <div className="space-y-2">
@@ -687,7 +860,9 @@ export function NewAppointmentDialog({
                   : "Booking…"
                 : editing
                   ? "Save Changes"
-                  : "Book Appointment"}
+                  : repeatPlan && repeatPlan.keep.length > 1
+                    ? `Book ${repeatPlan.keep.length} Appointments`
+                    : "Book Appointment"}
             </Button>
           </div>
         </form>

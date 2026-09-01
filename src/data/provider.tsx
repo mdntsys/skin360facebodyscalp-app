@@ -264,6 +264,8 @@ export interface DataContextValue extends Collections {
   clientName: (c: Client | string | undefined) => string;
   refresh: () => Promise<void>;
   createAppointment: (input: NewAppointmentInput) => Promise<Appointment>;
+  /** Insert many rows; confirmation email goes out for the first visit only. */
+  createAppointments: (inputs: NewAppointmentInput[]) => Promise<Appointment[]>;
   updateAppointment: (
     id: string,
     input: NewAppointmentInput
@@ -367,6 +369,20 @@ const DataContext = React.createContext<DataContextValue | null>(null);
 
 function byStart(a: Appointment, b: Appointment) {
   return new Date(a.startISO).getTime() - new Date(b.startISO).getTime();
+}
+
+function appointmentInsertRow(input: NewAppointmentInput) {
+  return {
+    client_id: input.clientId,
+    service_id: input.serviceId,
+    staff_id: input.staffId,
+    location_id: input.locationId,
+    start_at: input.startISO,
+    duration_min: input.durationMin,
+    price: input.price,
+    note: input.note ?? null,
+    room_id: input.roomId ?? null,
+  };
 }
 
 function bySort(a: Room, b: Room) {
@@ -488,21 +504,26 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  const notifyBooked = React.useCallback(async (appointmentId: string) => {
+    try {
+      const res = await fetch("/api/appointments/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId }),
+      });
+      if (!res.ok) {
+        console.error("appointment confirmation email failed:", res.status);
+      }
+    } catch (err) {
+      console.error("appointment confirmation email failed:", err);
+    }
+  }, []);
+
   const createAppointment = React.useCallback(
     async (input: NewAppointmentInput) => {
       const { data: row, error } = await supabase
         .from("appointments")
-        .insert({
-          client_id: input.clientId,
-          service_id: input.serviceId,
-          staff_id: input.staffId,
-          location_id: input.locationId,
-          start_at: input.startISO,
-          duration_min: input.durationMin,
-          price: input.price,
-          note: input.note ?? null,
-          room_id: input.roomId ?? null,
-        })
+        .insert(appointmentInsertRow(input))
         .select()
         .single();
       if (error) throw new Error(error.message);
@@ -512,21 +533,32 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         appointments: [...prev.appointments, created].sort(byStart),
       }));
       // Best-effort — the appointment is on the calendar either way.
-      try {
-        const res = await fetch("/api/appointments/notify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ appointmentId: created.id }),
-        });
-        if (!res.ok) {
-          console.error("appointment confirmation email failed:", res.status);
-        }
-      } catch (err) {
-        console.error("appointment confirmation email failed:", err);
-      }
+      void notifyBooked(created.id);
       return created;
     },
-    [supabase]
+    [supabase, notifyBooked]
+  );
+
+  const createAppointments = React.useCallback(
+    async (inputs: NewAppointmentInput[]) => {
+      if (inputs.length === 0) return [];
+      if (inputs.length === 1) return [await createAppointment(inputs[0])];
+      const { data: rows, error } = await supabase
+        .from("appointments")
+        .insert(inputs.map(appointmentInsertRow))
+        .select();
+      if (error) throw new Error(error.message);
+      const created = ((rows ?? []) as AppointmentRow[])
+        .map(mapAppointment)
+        .sort(byStart);
+      setData((prev) => ({
+        ...prev,
+        appointments: [...prev.appointments, ...created].sort(byStart),
+      }));
+      if (created[0]) void notifyBooked(created[0].id);
+      return created;
+    },
+    [supabase, createAppointment, notifyBooked]
   );
 
   const updateAppointment = React.useCallback(
@@ -1407,6 +1439,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       clientName,
       refresh,
       createAppointment,
+      createAppointments,
       updateAppointment,
       updateAppointmentStatus,
       createClient,
@@ -1443,6 +1476,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     profile,
     refresh,
     createAppointment,
+    createAppointments,
     updateAppointment,
     updateAppointmentStatus,
     createClient,
