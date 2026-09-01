@@ -1,9 +1,9 @@
 "use client";
 
-// Schedule — the girls' page. A staff login lands here and nowhere else.
-// They can book onto their own column (phone-ins). RLS still hides money,
-// forms, and other girls' days off. The sees-all switch only widens the
-// week view; this page renders whatever rows come back.
+// Schedule — the girls' page. A staff login lands here (and close-out).
+// They can book onto their own column (phone-ins) and check out their
+// own clients. RLS still hides other girls' money, forms, and days off.
+// The sees-all switch only widens the week view.
 
 import * as React from "react";
 import { addDays, addMinutes, format, isSameDay, isToday, startOfWeek } from "date-fns";
@@ -30,10 +30,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { AppointmentDrawer } from "../appointments/_components/appointment-drawer";
 import { NewAppointmentDialog } from "../appointments/_components/new-appointment-dialog";
+import { CheckoutDialog } from "../close-out/_components/checkout-dialog";
 
 export default function SchedulePage() {
   const {
     appointments,
+    payments,
     serviceById,
     staffById,
     roomById,
@@ -54,6 +56,7 @@ export default function SchedulePage() {
   const [anchor, setAnchor] = React.useState(() => new Date());
   const [bookOpen, setBookOpen] = React.useState(false);
   const [selected, setSelected] = React.useState<Appointment | null>(null);
+  const [checkoutFor, setCheckoutFor] = React.useState<Appointment | null>(null);
   const weekStart = startOfWeek(anchor, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -306,8 +309,37 @@ export default function SchedulePage() {
             ? (id) => handleCancel(id)
             : undefined
         }
+        onCheckout={
+          selected && isStaff && myStaffId && selected.staffId === myStaffId
+            ? (appt) => {
+                setSelected(null);
+                setCheckoutFor(appt);
+              }
+            : undefined
+        }
+        checkedOut={
+          selected
+            ? payments.some((p) => p.appointmentId === selected.id)
+            : false
+        }
         mode="cancel-only"
       />
+
+      {isStaff && myStaffId && (
+        <CheckoutDialog
+          open={checkoutFor !== null}
+          onOpenChange={(open) => {
+            if (!open) setCheckoutFor(null);
+          }}
+          appointment={checkoutFor}
+          day={
+            checkoutFor
+              ? format(new Date(checkoutFor.startISO), "yyyy-MM-dd")
+              : format(new Date(), "yyyy-MM-dd")
+          }
+          lockedStaffId={myStaffId}
+        />
+      )}
 
       {canBook && myStaffId && (
         <NewAppointmentDialog

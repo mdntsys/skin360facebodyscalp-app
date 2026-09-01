@@ -47,8 +47,11 @@ export default function CloseOutPage() {
     staffById,
     serviceById,
     clientName,
+    profile,
   } = useData();
   const { location } = useLocationFilter();
+  const isStaff = profile?.access === "staff";
+  const myStaffId = profile?.staffId ?? null;
 
   const [day, setDay] = React.useState(() => format(new Date(), "yyyy-MM-dd"));
   const [checkoutFor, setCheckoutFor] = React.useState<Appointment | null>(null);
@@ -63,14 +66,20 @@ export default function CloseOutPage() {
         (a) =>
           a.status !== "cancelled" &&
           isSameDay(new Date(a.startISO), selectedDay) &&
-          matchesLocation(a.locationId, location)
+          matchesLocation(a.locationId, location) &&
+          (!isStaff || !myStaffId || a.staffId === myStaffId)
       ),
-    [appointments, selectedDay, location]
+    [appointments, selectedDay, location, isStaff, myStaffId]
   );
 
   const dayPayments = React.useMemo(
-    () => payments.filter((p) => matchesLocation(p.locationId, location)),
-    [payments, location]
+    () =>
+      payments.filter(
+        (p) =>
+          matchesLocation(p.locationId, location) &&
+          (!isStaff || !myStaffId || p.staffId === myStaffId)
+      ),
+    [payments, location, isStaff, myStaffId]
   );
 
   const paymentByAppointment = React.useMemo(() => {
@@ -109,7 +118,9 @@ export default function CloseOutPage() {
           subtitle={
             outstanding > 0
               ? `${outstanding} of ${dayAppointments.length} visits still to check out`
-              : "Every visit is checked out — print the report below"
+              : isStaff
+                ? "Your visits are checked out"
+                : "Every visit is checked out — print the report below"
           }
           actions={
             <div className="flex flex-wrap items-center gap-2">
@@ -398,12 +409,14 @@ export default function CloseOutPage() {
         }}
         appointment={checkoutFor}
         day={day}
+        lockedStaffId={isStaff ? myStaffId ?? undefined : undefined}
       />
       <CheckoutDialog
         open={walkInOpen}
         onOpenChange={setWalkInOpen}
         appointment={null}
         day={day}
+        lockedStaffId={isStaff ? myStaffId ?? undefined : undefined}
       />
     </>
   );

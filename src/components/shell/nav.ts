@@ -20,9 +20,10 @@ export interface NavItem {
   icon: LucideIcon;
 }
 
-// Staff logins (the girls) get exactly one destination: their schedule.
+// Staff logins (the girls): their schedule, and close-out for their own clients.
 export const staffNavItems: NavItem[] = [
   { label: "Schedule", href: "/schedule", icon: CalendarDays },
+  { label: "Close-Out", href: "/close-out", icon: HandCoins },
 ];
 
 /** The staff landing page — where every staff-login redirect points. */

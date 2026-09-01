@@ -59,6 +59,8 @@ interface CheckoutDialogProps {
   appointment: Appointment | null;
   /** The close-out day being worked ("yyyy-MM-dd") — money is stamped to it. */
   day: string;
+  /** Staff logins can only check out as themselves. */
+  lockedStaffId?: string;
 }
 
 export function CheckoutDialog({
@@ -66,6 +68,7 @@ export function CheckoutDialog({
   onOpenChange,
   appointment,
   day,
+  lockedStaffId,
 }: CheckoutDialogProps) {
   const {
     clients,
@@ -73,6 +76,7 @@ export function CheckoutDialog({
     staff,
     clientPackages,
     serviceById,
+    staffById,
     clientName,
     recordCheckout,
   } = useData();
@@ -100,17 +104,22 @@ export function CheckoutDialog({
     if (!open) return;
     setClientId(appointment?.clientId ?? "");
     setServiceId(appointment?.serviceId ?? "");
-    setStaffId(appointment?.staffId ?? "");
+    setStaffId(lockedStaffId ?? appointment?.staffId ?? "");
     setLocationId(
       appointment?.locationId ??
-        (locationFilter === "toluca" ? "toluca" : "valencia")
+        (lockedStaffId
+          ? ((staffById.get(lockedStaffId)?.locations[0] as LocationId | undefined) ??
+            "valencia")
+          : locationFilter === "toluca"
+            ? "toluca"
+            : "valencia")
     );
     setAmount(appointment ? String(appointment.price) : "");
     setTip("0");
     setMethod("GoDaddy Terminal");
     setUsePackage(false);
     setSubmitting(false);
-  }, [open, appointment, locationFilter]);
+  }, [open, appointment, locationFilter, lockedStaffId, staffById]);
 
   const sortedClients = React.useMemo(
     () =>
@@ -132,7 +141,16 @@ export function CheckoutDialog({
   );
 
   // Which girl did the work — reality wins, so no capability filter here.
-  const staffOptions = staff.filter((s) => s.locations.includes(locationId));
+  // Staff logins are locked to their own column.
+  const staffOptions = staff.filter(
+    (s) =>
+      s.locations.includes(locationId) &&
+      (!lockedStaffId || s.id === lockedStaffId)
+  );
+  const lockedStaff = lockedStaffId
+    ? staffById.get(lockedStaffId)
+    : undefined;
+  const performerId = lockedStaffId ?? staffId;
 
   const packageCandidate = React.useMemo(() => {
     if (!clientId || !serviceId) return undefined;
@@ -150,7 +168,9 @@ export function CheckoutDialog({
   // "None" is only for visits where no money moved (package session, no tip).
   const methodMismatch = total > 0 && method === "None";
   const canSubmit =
-    Boolean(clientId && serviceId && staffId) && !methodMismatch && !submitting;
+    Boolean(clientId && serviceId && performerId) &&
+    !methodMismatch &&
+    !submitting;
 
   function handleServiceChange(id: string) {
     setServiceId(id);
@@ -175,7 +195,7 @@ export function CheckoutDialog({
     try {
       await recordCheckout({
         clientId,
-        staffId,
+        staffId: performerId,
         serviceId,
         locationId,
         subtotal: amountNum,
@@ -224,19 +244,20 @@ export function CheckoutDialog({
                   value={locationId}
                   onValueChange={(v) => {
                     setLocationId(v as LocationId);
-                    setStaffId("");
+                    if (!lockedStaffId) setStaffId("");
                   }}
                 >
                   <SelectTrigger id="co-location" className={TRIGGER_CLASSES}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper">
-                    <SelectItem value="valencia" className="text-sm">
-                      Valencia
-                    </SelectItem>
-                    <SelectItem value="toluca" className="text-sm">
-                      Toluca Lake
-                    </SelectItem>
+                    {(lockedStaff?.locations ?? ["valencia", "toluca"]).map(
+                      (id) => (
+                        <SelectItem key={id} value={id} className="text-sm">
+                          {id === "toluca" ? "Toluca Lake" : "Valencia"}
+                        </SelectItem>
+                      )
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -292,24 +313,34 @@ export function CheckoutDialog({
             <Label htmlFor="co-staff" className={LABEL_CLASSES}>
               Performed by
             </Label>
-            <Select value={staffId} onValueChange={setStaffId}>
-              <SelectTrigger id="co-staff" className={TRIGGER_CLASSES}>
-                <SelectValue placeholder="Who did the work?" />
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {staffOptions.map((s) => (
-                  <SelectItem key={s.id} value={s.id} className="text-sm">
-                    <span className="flex items-center gap-2">
-                      <span
-                        className="size-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: s.color }}
-                      />
-                      {s.name}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {lockedStaff ? (
+              <p className="flex h-11 items-center gap-2 px-1 text-sm text-ink">
+                <span
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: lockedStaff.color }}
+                />
+                {lockedStaff.name}
+              </p>
+            ) : (
+              <Select value={staffId} onValueChange={setStaffId}>
+                <SelectTrigger id="co-staff" className={TRIGGER_CLASSES}>
+                  <SelectValue placeholder="Who did the work?" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  {staffOptions.map((s) => (
+                    <SelectItem key={s.id} value={s.id} className="text-sm">
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="size-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: s.color }}
+                        />
+                        {s.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {packageCandidate && (

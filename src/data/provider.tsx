@@ -1150,6 +1150,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (error.message.includes("CHECKOUT_DUPLICATE")) {
           throw new Error("This visit is already checked out.");
         }
+        if (error.message.includes("CHECKOUT_FORBIDDEN")) {
+          throw new Error("You can only check out your own clients.");
+        }
         if (error.message.includes("CHECKOUT_PACKAGE")) {
           throw new Error(
             "That package has no sessions left — it may have been used from another device."

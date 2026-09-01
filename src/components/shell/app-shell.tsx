@@ -27,12 +27,14 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Staff logins (the girls) live on the schedule page only. RLS already hides
-  // everything else server-side; this keeps the UI from showing empty shells.
+  // Staff logins (the girls) live on their schedule and close-out. RLS hides
+  // everyone else's money; this keeps the UI from showing empty shells.
+  const staffAllowed =
+    pathname.startsWith(STAFF_HOME) || pathname.startsWith("/close-out");
   const staffOffLimits =
     status === "ready" &&
     profile?.access === "staff" &&
-    !pathname.startsWith(STAFF_HOME);
+    !staffAllowed;
   React.useEffect(() => {
     if (staffOffLimits) router.replace(STAFF_HOME);
   }, [staffOffLimits, router]);

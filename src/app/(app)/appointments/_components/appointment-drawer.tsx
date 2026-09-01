@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { format } from "date-fns";
-import { Check, LogIn, Pencil, Phone, X } from "lucide-react";
+import { Check, HandCoins, LogIn, Pencil, Phone, X } from "lucide-react";
 
 import {
   formatCurrency,
@@ -41,12 +41,17 @@ export function AppointmentDrawer({
   onClose,
   onUpdateStatus,
   onEdit,
+  onCheckout,
+  checkedOut = false,
   mode = "full",
 }: {
   appointment: Appointment | null;
   onClose: () => void;
   onUpdateStatus?: (id: string, status: AppointmentStatus) => void;
   onEdit?: (appt: Appointment) => void;
+  /** Staff close-out from their schedule. */
+  onCheckout?: (appt: Appointment) => void;
+  checkedOut?: boolean;
   /**
    * "full" is Carolina's calendar. "cancel-only" is a girl opening her own
    * schedule: read the note, and cancel if the client called her directly.
@@ -154,41 +159,57 @@ export function AppointmentDrawer({
         </div>
 
         {/* Actions */}
-        {updateStatus && mode === "cancel-only" &&
-          (appt.status === "confirmed" || appt.status === "checked-in") && (
+        {mode === "cancel-only" &&
+          (appt.status === "confirmed" || appt.status === "checked-in") &&
+          (onCheckout || updateStatus) && (
             <div className="space-y-2 border-t border-line bg-ivory/50 px-6 py-5">
-              {confirmingCancel ? (
-                <>
-                  <p className="pb-1 text-center text-sm font-light text-muted-warm">
-                    Cancel this one? It comes off your schedule, and we&apos;ll
-                    email the client if we have their address.
-                  </p>
+              {onCheckout && !checkedOut && !confirmingCancel && (
+                <Button
+                  className="w-full"
+                  onClick={() => onCheckout(appt)}
+                >
+                  <HandCoins data-icon="inline-start" strokeWidth={1.75} />
+                  Check Out
+                </Button>
+              )}
+              {onCheckout && checkedOut && !confirmingCancel && (
+                <p className="text-center text-sm font-light text-emerald-700">
+                  Already checked out
+                </p>
+              )}
+              {updateStatus &&
+                (confirmingCancel ? (
+                  <>
+                    <p className="pb-1 text-center text-sm font-light text-muted-warm">
+                      Cancel this one? It comes off your schedule, and we&apos;ll
+                      email the client if we have their address.
+                    </p>
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      onClick={() => updateStatus(appt.id, "cancelled")}
+                    >
+                      <X data-icon="inline-start" strokeWidth={1.75} />
+                      Yes, cancel it
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setConfirmingCancel(false)}
+                    >
+                      Keep it
+                    </Button>
+                  </>
+                ) : (
                   <Button
                     variant="destructive"
                     className="w-full"
-                    onClick={() => updateStatus(appt.id, "cancelled")}
+                    onClick={() => setConfirmingCancel(true)}
                   >
                     <X data-icon="inline-start" strokeWidth={1.75} />
-                    Yes, cancel it
+                    Cancel Appointment
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => setConfirmingCancel(false)}
-                  >
-                    Keep it
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  variant="destructive"
-                  className="w-full"
-                  onClick={() => setConfirmingCancel(true)}
-                >
-                  <X data-icon="inline-start" strokeWidth={1.75} />
-                  Cancel Appointment
-                </Button>
-              )}
+                ))}
             </div>
           )}
 
