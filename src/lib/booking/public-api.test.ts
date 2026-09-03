@@ -18,7 +18,6 @@ function mkData(): PublicBookingData {
     { id: "svc-facial", name: "Classic Facial", category: "Facials" as const, price: 145, durationMin: 55, bufferMin: 15, description: "" },
     { id: "svc-body", name: "Lymphatic Drainage", category: "Body" as const, price: 195, durationMin: 55, bufferMin: 15, description: "" },
     { id: "svc-mani", name: "Gel Manicure", category: "Nails" as const, price: 40, durationMin: 45, bufferMin: 15, description: "" },
-    { id: "svc-fills", name: "Nail Fills", category: "Nails" as const, price: 60, durationMin: 60, bufferMin: 15, description: "" },
     { id: "svc-gold", name: "24K Gold Therapy", category: "Face Add-Ons" as const, price: 100, durationMin: 25, bufferMin: 0, description: "", addonFor: ["Facials", "Advanced Treatments"] },
     { id: "svc-french", name: "French Tip w/Service", category: "Nails" as const, price: 10, durationMin: 30, bufferMin: 0, description: "", addonFor: ["Nails"] },
   ];
@@ -37,8 +36,8 @@ function mkData(): PublicBookingData {
       { id: "staff-josseline", name: "Josseline Mejia", bookable: true, serviceIds: ["svc-facial", "svc-gold"] },
       { id: "staff-gloria", name: "Gloria Sanchez", bookable: true, serviceIds: ["svc-facial"] },
       // Cassie does the nail add-ons; Vero only the mani itself.
-      { id: "staff-cassie", name: "Cassie Hughes", bookable: true, serviceIds: ["svc-mani", "svc-french", "svc-fills"] },
-      { id: "staff-vero", name: "Vero Alvarez", bookable: true, serviceIds: ["svc-mani", "svc-fills"] },
+      { id: "staff-cassie", name: "Cassie Hughes", bookable: true, serviceIds: ["svc-mani", "svc-french"] },
+      { id: "staff-vero", name: "Vero Alvarez", bookable: true, serviceIds: ["svc-mani"] },
       { id: "staff-carolina", name: "Carolina", bookable: true, serviceIds: [] },
     ],
     availabilityRules: [
@@ -185,20 +184,6 @@ describe("computeSlots", () => {
       ...MON,
     });
     expect(vero).toEqual([]);
-  });
-
-  it("lets a second nail main ride along (fill + pedi)", () => {
-    const slots = computeSlots(mkData(), [], {
-      serviceVariationId: "svc-fills",
-      addonIds: ["svc-mani"],
-      teamMemberId: "staff-vero",
-      ...MON,
-    });
-    expect(slots.length).toBeGreaterThan(0);
-    // 60 + 45 = 105 min, last start in a 10–18 day is 16:15.
-    expect(Math.max(...slots.map((s) => ms(s.startAt)))).toBe(
-      ms("2027-08-09T16:15:00-07:00")
-    );
   });
 
   it("rejects an add-on that doesn't pair with the service", () => {

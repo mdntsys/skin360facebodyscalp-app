@@ -368,7 +368,7 @@ export function BookingFlow() {
           className={buttonClass}
         >
           {addonIds.length > 0
-            ? `Continue with ${addonIds.length} extra${
+            ? `Continue with ${addonIds.length} add-on${
                 addonIds.length > 1 ? "s" : ""
               }`
             : "No thanks, continue"}

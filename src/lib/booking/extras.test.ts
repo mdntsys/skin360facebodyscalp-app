@@ -50,17 +50,13 @@ const facial = svc({
 });
 
 describe("extraAttachesToMain", () => {
-  it("lets a second nail main ride along (fill + pedi)", () => {
-    expect(extraAttachesToMain(fills, gel)).toBe(true);
-    expect(extraAttachesToMain(gel, fills)).toBe(true);
-  });
-
   it("lets official add-ons attach", () => {
     expect(extraAttachesToMain(fills, french)).toBe(true);
     expect(extraAttachesToMain(facial, gold)).toBe(true);
   });
 
-  it("rejects a facial bolted onto a fill, and itself", () => {
+  it("rejects another main, a mismatched add-on, and itself", () => {
+    expect(extraAttachesToMain(fills, gel)).toBe(false);
     expect(extraAttachesToMain(fills, facial)).toBe(false);
     expect(extraAttachesToMain(fills, fills)).toBe(false);
     expect(extraAttachesToMain(fills, gold)).toBe(false);
@@ -70,36 +66,36 @@ describe("extraAttachesToMain", () => {
 describe("extrasForMain", () => {
   const all = [fills, gel, french, gold, facial];
 
-  it("offers other nail mains and nail add-ons with a fill", () => {
-    expect(extrasForMain(fills, all).map((s) => s.id).sort()).toEqual([
-      "french",
-      "gel",
-    ]);
+  it("offers nail add-ons with a fill, not another main", () => {
+    expect(extrasForMain(fills, all).map((s) => s.id)).toEqual(["french"]);
   });
 
   it("scopes to what the girl actually performs", () => {
+    expect(extrasForMain(fills, all, ["fills", "gel"]).map((s) => s.id)).toEqual(
+      []
+    );
     expect(
-      extrasForMain(fills, all, ["fills", "gel"]).map((s) => s.id)
-    ).toEqual(["gel"]);
+      extrasForMain(fills, all, ["fills", "french"]).map((s) => s.id)
+    ).toEqual(["french"]);
   });
 });
 
 describe("combined totals / label", () => {
   it("adds duration and price", () => {
-    expect(combinedDuration(fills, [gel, french])).toBe(150);
-    expect(combinedPrice(fills, [gel, french])).toBe(110);
+    expect(combinedDuration(fills, [french])).toBe(90);
+    expect(combinedPrice(fills, [french])).toBe(70);
   });
 
   it("labels the visit", () => {
     const byId = new Map([
       ["fills", fills],
-      ["gel", gel],
+      ["french", french],
     ]);
     expect(
       appointmentServiceLabel(
-        { serviceId: "fills", addonServiceIds: ["gel"] },
+        { serviceId: "fills", addonServiceIds: ["french"] },
         byId
       )
-    ).toBe("Nail Fills + Gel Manicure or Pedicure");
+    ).toBe("Nail Fills + French Tip w/Service");
   });
 });

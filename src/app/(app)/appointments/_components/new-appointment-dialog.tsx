@@ -638,7 +638,7 @@ export function NewAppointmentDialog({
 
           {extraOptions.length > 0 && (
             <div className="space-y-2.5">
-              <Label className={LABEL_CLASSES}>Add to this visit</Label>
+              <Label className={LABEL_CLASSES}>Add-ons</Label>
               <div className="max-h-48 space-y-2 overflow-y-auto rounded-2xl border border-line bg-ivory/40 px-4 py-3">
                 {extraOptions.map((s) => {
                   const checked = extraServiceIds.includes(s.id);

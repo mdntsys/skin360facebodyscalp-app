@@ -1,6 +1,5 @@
-// Extra services on one visit: official add-ons for the main's category,
-// plus other mains in that same category (fill + pedi). Combined duration
-// and price live on a single appointment row.
+// Add-ons on one visit: official add-ons for the main's category only.
+// Combined duration and price live on a single appointment row.
 
 import type { Service } from "../../data/types";
 
@@ -11,8 +10,7 @@ export function isAddonService(s: Service): boolean {
 export function extraAttachesToMain(main: Service, extra: Service): boolean {
   if (extra.id === main.id) return false;
   if (extra.active === false) return false;
-  if (isAddonService(extra)) return extra.addonFor!.includes(main.category);
-  return extra.category === main.category;
+  return isAddonService(extra) && extra.addonFor!.includes(main.category);
 }
 
 export function extrasForMain(

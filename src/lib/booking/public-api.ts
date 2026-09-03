@@ -271,15 +271,6 @@ export async function listPublicServices(): Promise<{
       category: s.category,
       teamMemberIds: performers.map((p) => p.id),
     });
-    // Same-category mains can ride along on one visit (fill + pedi).
-    addons.push({
-      variationId: s.id,
-      name: s.name,
-      durationMin: s.durationMin,
-      priceCents: Math.round(s.price * 100),
-      addonFor: [s.category],
-      teamMemberIds: performers.map((p) => p.id),
-    });
   }
   services.sort(
     (a, b) =>
@@ -418,7 +409,7 @@ export async function createPublicBooking(args: {
     const addon = data.serviceById.get(id);
     if (!addon || !extraAttachesToMain(service, addon)) {
       throw new BookingError(
-        "One of those extras isn't available with this service."
+        "One of those add-ons isn't available with this service."
       );
     }
     addons.push(addon);

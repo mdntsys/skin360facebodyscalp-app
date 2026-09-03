@@ -102,7 +102,7 @@ export interface Appointment {
   status: AppointmentStatus;
   note?: string;
   roomId?: string;
-  /** Extra services on this visit (add-ons or another main in the same category). */
+  /** Add-ons on this visit. Combined duration/price live on the row. */
   addonServiceIds?: string[];
 }
 
