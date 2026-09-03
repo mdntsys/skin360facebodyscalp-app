@@ -3,7 +3,12 @@
 import { format } from "date-fns";
 import { CalendarDays } from "lucide-react";
 
-import { formatCurrency, useData, type Client } from "@/data";
+import {
+  appointmentServiceLabel,
+  formatCurrency,
+  useData,
+  type Client,
+} from "@/data";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card } from "@/components/ui/card";
 import {
@@ -60,7 +65,6 @@ export function AppointmentsTab({ client }: { client: Client }) {
           <TableBody>
             {history.map((a) => {
               const start = new Date(a.startISO);
-              const service = serviceById.get(a.serviceId);
               const esthetician = staffById.get(a.staffId);
               return (
                 <TableRow
@@ -74,7 +78,7 @@ export function AppointmentsTab({ client }: { client: Client }) {
                     {format(start, "h:mm a")}
                   </TableCell>
                   <TableCell className="py-3 text-sm text-ink">
-                    {service?.name}
+                    {appointmentServiceLabel(a, serviceById)}
                   </TableCell>
                   <TableCell className="py-3 text-sm font-light text-ink-soft">
                     {esthetician?.name}
@@ -99,7 +103,6 @@ export function AppointmentsTab({ client }: { client: Client }) {
       <div className="space-y-3 lg:hidden">
         {history.map((a) => {
           const start = new Date(a.startISO);
-          const service = serviceById.get(a.serviceId);
           const esthetician = staffById.get(a.staffId);
           return (
             <div
@@ -107,7 +110,9 @@ export function AppointmentsTab({ client }: { client: Client }) {
               className="rounded-2xl border border-line bg-white p-4 shadow-xs"
             >
               <div className="flex items-start justify-between gap-3">
-                <p className="min-w-0 text-sm text-ink">{service?.name}</p>
+                <p className="min-w-0 text-sm text-ink">
+                  {appointmentServiceLabel(a, serviceById)}
+                </p>
                 <StatusBadge status={a.status} className="shrink-0" />
               </div>
               <p className="mt-1 text-xs font-light text-muted-warm">

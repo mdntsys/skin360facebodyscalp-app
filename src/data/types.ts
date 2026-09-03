@@ -102,6 +102,8 @@ export interface Appointment {
   status: AppointmentStatus;
   note?: string;
   roomId?: string;
+  /** Extra services on this visit (add-ons or another main in the same category). */
+  addonServiceIds?: string[];
 }
 
 export interface Room {

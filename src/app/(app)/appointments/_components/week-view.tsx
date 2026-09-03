@@ -4,6 +4,7 @@ import { addDays, format, isSameDay, isToday, startOfDay } from "date-fns";
 import { CalendarOff } from "lucide-react";
 
 import {
+  appointmentServiceLabel,
   matchesLocation,
   useData,
   type Appointment,
@@ -133,7 +134,7 @@ export function WeekView({
                           {clientById.get(a.clientId)?.firstName ?? "Client"}
                         </span>
                         <span className="block truncate text-[10px] font-light text-muted-warm">
-                          {serviceById.get(a.serviceId)?.name}
+                          {appointmentServiceLabel(a, serviceById)}
                         </span>
                       </button>
                     );

@@ -168,6 +168,7 @@ export interface AppointmentRow {
   status: string;
   note: string | null;
   room_id: string | null;
+  addon_service_ids?: string[] | null;
 }
 
 export function mapAppointment(r: AppointmentRow): Appointment {
@@ -183,6 +184,7 @@ export function mapAppointment(r: AppointmentRow): Appointment {
     status: r.status as AppointmentStatus,
     note: r.note ?? undefined,
     roomId: r.room_id ?? undefined,
+    addonServiceIds: r.addon_service_ids ?? [],
   };
 }
 

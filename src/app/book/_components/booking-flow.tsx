@@ -151,7 +151,11 @@ export function BookingFlow() {
   }, [step, service, staffChoice, addonIds, weekPage]);
 
   const compatibleAddons = service
-    ? addons.filter((a) => a.addonFor.includes(service.category))
+    ? addons.filter(
+        (a) =>
+          a.addonFor.includes(service.category) &&
+          a.variationId !== service.variationId
+      )
     : [];
   const chosenAddons = compatibleAddons.filter((a) =>
     addonIds.includes(a.variationId)
@@ -263,8 +267,10 @@ export function BookingFlow() {
                       setStaffChoice("any");
                       setWeekPage(0);
                       setSlot(null);
-                      const hasAddons = addons.some((a) =>
-                        a.addonFor.includes(s.category)
+                      const hasAddons = addons.some(
+                        (a) =>
+                          a.addonFor.includes(s.category) &&
+                          a.variationId !== s.variationId
                       );
                       setStep(hasAddons ? "addons" : "staff");
                     }}
@@ -362,7 +368,7 @@ export function BookingFlow() {
           className={buttonClass}
         >
           {addonIds.length > 0
-            ? `Continue with ${addonIds.length} add-on${
+            ? `Continue with ${addonIds.length} extra${
                 addonIds.length > 1 ? "s" : ""
               }`
             : "No thanks, continue"}

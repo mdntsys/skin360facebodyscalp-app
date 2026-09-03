@@ -12,7 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { useData, type Client } from "@/data";
+import { appointmentServiceLabel, useData, type Client } from "@/data";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -144,7 +144,6 @@ export function OverviewTab({ client }: { client: Client }) {
           )}
           {upcoming.map((a) => {
             const start = new Date(a.startISO);
-            const service = serviceById.get(a.serviceId);
             const esthetician = staffById.get(a.staffId);
             return (
               <div
@@ -160,7 +159,9 @@ export function OverviewTab({ client }: { client: Client }) {
                   </span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-ink">{service?.name}</p>
+                  <p className="truncate text-sm text-ink">
+                    {appointmentServiceLabel(a, serviceById)}
+                  </p>
                   <p className="truncate text-xs font-light text-muted-warm">
                     {esthetician?.name} ·{" "}
                     {locationById.get(a.locationId)?.shortName}

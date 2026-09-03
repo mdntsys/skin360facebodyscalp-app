@@ -17,7 +17,13 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { formatCurrency, matchesLocation, useData, type Appointment } from "@/data";
+import {
+  appointmentServiceLabel,
+  formatCurrency,
+  matchesLocation,
+  useData,
+  type Appointment,
+} from "@/data";
 import { closeOutForDay } from "@/lib/close-out";
 import { useLocationFilter } from "@/components/shell/location-context";
 import { PageHeader } from "@/components/shared/page-header";
@@ -169,7 +175,7 @@ export default function CloseOutPage() {
                         {clientName(a.clientId)}
                       </p>
                       <p className="truncate text-xs font-light text-muted-warm">
-                        {serviceById.get(a.serviceId)?.name ?? a.serviceId}
+                        {appointmentServiceLabel(a, serviceById)}
                         <span className="mx-1.5">·</span>
                         <span
                           className="mr-1 inline-block size-2 rounded-full align-baseline"

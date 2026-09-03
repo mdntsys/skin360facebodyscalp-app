@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 
 import {
+  appointmentServiceLabel,
   matchesLocation,
   useData,
   type Appointment,
@@ -247,7 +248,7 @@ export default function SchedulePage() {
                         appointment={a}
                         showStaff={seesAll}
                         clientName={clientName}
-                        serviceName={serviceById.get(a.serviceId)?.name}
+                        serviceName={appointmentServiceLabel(a, serviceById)}
                         staffMember={staffById.get(a.staffId)}
                         roomName={
                           a.roomId ? roomById.get(a.roomId)?.name : undefined

@@ -3,7 +3,12 @@
 import * as React from "react";
 import { format, isToday } from "date-fns";
 
-import { formatCurrency, useData, type Appointment } from "@/data";
+import {
+  appointmentServiceLabel,
+  formatCurrency,
+  useData,
+  type Appointment,
+} from "@/data";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -117,7 +122,7 @@ export function ListView({
                           {clientName(a.clientId)}
                         </TableCell>
                         <TableCell className="max-w-56 truncate px-4 py-3 font-light text-ink-soft">
-                          {serviceById.get(a.serviceId)?.name}
+                          {appointmentServiceLabel(a, serviceById)}
                         </TableCell>
                         <TableCell className="px-4 py-3 font-light text-ink-soft">
                           <span className="flex items-center gap-2">
@@ -177,7 +182,7 @@ export function ListView({
                         {clientName(a.clientId)}
                       </p>
                       <p className="truncate text-xs font-light text-muted-warm">
-                        {serviceById.get(a.serviceId)?.name} ·{" "}
+                        {appointmentServiceLabel(a, serviceById)} ·{" "}
                         {staffById.get(a.staffId)?.name.split(" ")[0]}
                       </p>
                     </div>

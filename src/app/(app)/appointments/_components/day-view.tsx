@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  appointmentServiceLabel,
   matchesLocation,
   useData,
   type Appointment,
@@ -180,7 +181,7 @@ function StaffColumn({
                   cancelled && "line-through"
                 )}
               >
-                {serviceById.get(a.serviceId)?.name}
+                {appointmentServiceLabel(a, serviceById)}
               </p>
             )}
           </button>

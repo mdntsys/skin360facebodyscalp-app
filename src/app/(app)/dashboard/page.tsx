@@ -14,6 +14,7 @@ import {
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import {
+  appointmentServiceLabel,
   formatCurrency,
   matchesLocation,
   revenueTrend,
@@ -221,7 +222,6 @@ export default function DashboardPage() {
             )}
             {upcoming.map((a) => {
               const start = new Date(a.startISO);
-              const service = serviceById.get(a.serviceId);
               const staffMember = staffById.get(a.staffId);
               return (
                 <Link
@@ -242,7 +242,8 @@ export default function DashboardPage() {
                       {clientName(a.clientId)}
                     </p>
                     <p className="truncate text-xs font-light text-muted-warm">
-                      {service?.name} · {staffMember?.name.split(" ")[0]}
+                      {appointmentServiceLabel(a, serviceById)} ·{" "}
+                      {staffMember?.name.split(" ")[0]}
                     </p>
                   </div>
                   <span
@@ -331,7 +332,7 @@ export default function DashboardPage() {
                       {clientName(a.clientId)}
                     </p>
                     <p className="truncate text-xs font-light text-muted-warm">
-                      {serviceById.get(a.serviceId)?.name} ·{" "}
+                      {appointmentServiceLabel(a, serviceById)} ·{" "}
                       {locationById.get(a.locationId)?.shortName}
                     </p>
                   </div>

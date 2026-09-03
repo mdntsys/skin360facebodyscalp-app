@@ -4,6 +4,7 @@ import type { Appointment, LocationId, Payment } from "./types";
 
 export * from "./types";
 export { DataProvider, useData } from "./provider";
+export { appointmentServiceLabel } from "../lib/booking/extras";
 export type {
   CheckoutInput,
   DataContextValue,

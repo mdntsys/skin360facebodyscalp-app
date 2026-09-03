@@ -32,6 +32,7 @@ import {
   getConflicts,
   type SchedulingContext,
 } from "../scheduling/engine";
+import { extraAttachesToMain } from "./extras";
 import { sendEmail } from "../email/send";
 import {
   escapeHtml,
@@ -270,6 +271,15 @@ export async function listPublicServices(): Promise<{
       category: s.category,
       teamMemberIds: performers.map((p) => p.id),
     });
+    // Same-category mains can ride along on one visit (fill + pedi).
+    addons.push({
+      variationId: s.id,
+      name: s.name,
+      durationMin: s.durationMin,
+      priceCents: Math.round(s.price * 100),
+      addonFor: [s.category],
+      teamMemberIds: performers.map((p) => p.id),
+    });
   }
   services.sort(
     (a, b) =>
@@ -320,7 +330,7 @@ export function computeSlots(
   const addons: Service[] = [];
   for (const id of addonIds) {
     const addon = data.serviceById.get(id);
-    if (!addon?.addonFor?.includes(main.category)) return [];
+    if (!addon || !extraAttachesToMain(main, addon)) return [];
     addons.push(addon);
   }
 
@@ -406,9 +416,9 @@ export async function createPublicBooking(args: {
   const addons: Service[] = [];
   for (const id of addonIds) {
     const addon = data.serviceById.get(id);
-    if (!addon?.addonFor?.includes(service.category)) {
+    if (!addon || !extraAttachesToMain(service, addon)) {
       throw new BookingError(
-        "One of those add-ons isn't available with this service."
+        "One of those extras isn't available with this service."
       );
     }
     addons.push(addon);

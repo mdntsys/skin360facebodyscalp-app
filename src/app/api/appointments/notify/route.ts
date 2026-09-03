@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
   const { data: appt, error: apptError } = await supabase
     .from("appointments")
-    .select("id, client_id, service_id, staff_id, location_id, start_at, status, note")
+    .select("id, client_id, service_id, staff_id, location_id, start_at, status, note, addon_service_ids")
     .eq("id", appointmentId)
     .single();
   if (apptError || !appt) {
@@ -75,10 +75,26 @@ export async function POST(request: Request) {
     );
   }
 
+  const addonIds = Array.isArray(appt.addon_service_ids)
+    ? (appt.addon_service_ids as string[]).filter(Boolean)
+    : [];
+  let addonNames: string[] = [];
+  if (addonIds.length > 0) {
+    const { data: extraRows } = await supabase
+      .from("services")
+      .select("id, name")
+      .in("id", addonIds);
+    const byId = new Map((extraRows ?? []).map((r) => [r.id, r.name]));
+    addonNames = addonIds
+      .map((id) => byId.get(id))
+      .filter((n): n is string => Boolean(n));
+  }
+
   const shared = {
     to: client.email ?? "",
     firstName: client.first_name ?? "",
     serviceName: service.name,
+    addonNames,
     startAt: appt.start_at,
     staffName: staffFirstName(staff?.name),
     locationId: appt.location_id,
@@ -137,6 +153,7 @@ export async function POST(request: Request) {
       staffId: appt.staff_id,
       staffName: staffFirstName(staff?.name),
       serviceName: service.name,
+      addonNames,
       startAt: appt.start_at,
       clientName:
         [client.first_name, client.last_name].filter(Boolean).join(" ") ||

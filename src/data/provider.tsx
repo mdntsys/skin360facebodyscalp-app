@@ -104,6 +104,7 @@ export interface NewAppointmentInput {
   price: number;
   note?: string;
   roomId?: string | null;
+  addonServiceIds?: string[];
 }
 
 export interface RoomInput {
@@ -382,6 +383,7 @@ function appointmentInsertRow(input: NewAppointmentInput) {
     price: input.price,
     note: input.note ?? null,
     room_id: input.roomId ?? null,
+    addon_service_ids: input.addonServiceIds ?? [],
   };
 }
 
@@ -575,6 +577,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           price: input.price,
           note: input.note ?? null,
           room_id: input.roomId ?? null,
+          addon_service_ids: input.addonServiceIds ?? [],
         })
         .eq("id", id)
         .select()

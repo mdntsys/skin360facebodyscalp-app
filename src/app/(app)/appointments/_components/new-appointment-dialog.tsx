@@ -6,6 +6,7 @@ import { AlertTriangle, Sparkles, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  formatCurrency,
   useData,
   type Appointment,
   type LocationFilter,
@@ -26,7 +27,13 @@ import {
   seriesNoteLine,
   type RepeatUnit,
 } from "@/lib/scheduling/recurrence";
+import {
+  combinedDuration,
+  combinedPrice,
+  extrasForMain,
+} from "@/lib/booking/extras";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -155,6 +162,7 @@ export function NewAppointmentDialog({
   const [repeatEvery, setRepeatEvery] = React.useState("1");
   const [repeatUnit, setRepeatUnit] = React.useState<RepeatUnit>("week");
   const [repeatUntil, setRepeatUntil] = React.useState("");
+  const [extraServiceIds, setExtraServiceIds] = React.useState<string[]>([]);
   // True once the front desk picks a room by hand — auto-suggestion then backs off.
   const roomTouchedRef = React.useRef(false);
 
@@ -185,6 +193,7 @@ export function NewAppointmentDialog({
       setRoomId(appointment.roomId ?? NO_ROOM);
       roomTouchedRef.current = true;
       setNote(appointment.note ?? "");
+      setExtraServiceIds(appointment.addonServiceIds ?? []);
       setRepeating(false);
       setRepeatEvery("1");
       setRepeatUnit("week");
@@ -199,6 +208,7 @@ export function NewAppointmentDialog({
       setRoomId(NO_ROOM);
       roomTouchedRef.current = false;
       setNote("");
+      setExtraServiceIds([]);
       setRepeating(false);
       setRepeatEvery("1");
       setRepeatUnit("week");
@@ -233,15 +243,29 @@ export function NewAppointmentDialog({
     [scopedServices]
   );
 
+  const service = serviceById.get(serviceId);
+  const extraOptions = React.useMemo(() => {
+    if (!service) return [];
+    return extrasForMain(
+      service,
+      scopedServices,
+      lockedStaff && lockedStaff.serviceIds.length > 0
+        ? lockedStaff.serviceIds
+        : undefined
+    );
+  }, [service, scopedServices, lockedStaff]);
+  const extraServices = extraServiceIds
+    .map((id) => serviceById.get(id))
+    .filter((s): s is Service => Boolean(s));
+
+  const requiredServiceIds = [serviceId, ...extraServiceIds].filter(Boolean);
   const staffOptions = staff.filter(
     (s) =>
       (!lockedStaffId || s.id === lockedStaffId) &&
       s.locations.includes(locationId) &&
-      (!serviceId ||
-        s.serviceIds.length === 0 ||
-        s.serviceIds.includes(serviceId))
+      (s.serviceIds.length === 0 ||
+        requiredServiceIds.every((id) => s.serviceIds.includes(id)))
   );
-  const service = serviceById.get(serviceId);
   const performerId = lockedStaffId ?? staffId;
   const canSubmit = Boolean(
     clientId && serviceId && performerId && date && time && !addingClient
@@ -285,14 +309,22 @@ export function NewAppointmentDialog({
       .sort((a, b) => a.sort - b.sort);
   }, [rooms, locationId, service]);
 
-  const durationMin =
-    editing && appointment && appointment.serviceId === serviceId
+  const durationMin = service
+    ? extraServices.length === 0 &&
+      editing &&
+      appointment &&
+      appointment.serviceId === serviceId
       ? appointment.durationMin
-      : (service?.durationMin ?? 0);
-  const price =
-    editing && appointment && appointment.serviceId === serviceId
+      : combinedDuration(service, extraServices)
+    : 0;
+  const price = service
+    ? extraServices.length === 0 &&
+      editing &&
+      appointment &&
+      appointment.serviceId === serviceId
       ? appointment.price
-      : (service?.price ?? 0);
+      : combinedPrice(service, extraServices)
+    : 0;
 
   const draft = React.useMemo<DraftAppointment | null>(() => {
     if (!service || !performerId || !startISO) return null;
@@ -444,6 +476,7 @@ export function NewAppointmentDialog({
       price,
       note: userNote,
       roomId: chosenRoomId ?? null,
+      addonServiceIds: extraServiceIds,
     };
     try {
       if (appointment) {
@@ -571,7 +604,13 @@ export function NewAppointmentDialog({
             <Label htmlFor="appt-service" className={LABEL_CLASSES}>
               Service
             </Label>
-            <Select value={serviceId} onValueChange={setServiceId}>
+            <Select
+              value={serviceId}
+              onValueChange={(id) => {
+                setServiceId(id);
+                setExtraServiceIds([]);
+              }}
+            >
               <SelectTrigger id="appt-service" className={TRIGGER_CLASSES}>
                 <SelectValue placeholder="Select a service" />
               </SelectTrigger>
@@ -596,6 +635,46 @@ export function NewAppointmentDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {extraOptions.length > 0 && (
+            <div className="space-y-2.5">
+              <Label className={LABEL_CLASSES}>Add to this visit</Label>
+              <div className="max-h-48 space-y-2 overflow-y-auto rounded-2xl border border-line bg-ivory/40 px-4 py-3">
+                {extraOptions.map((s) => {
+                  const checked = extraServiceIds.includes(s.id);
+                  return (
+                    <label
+                      key={s.id}
+                      className="flex cursor-pointer items-start gap-2.5 text-sm font-light text-ink-soft"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() =>
+                          setExtraServiceIds((ids) =>
+                            checked
+                              ? ids.filter((id) => id !== s.id)
+                              : [...ids, s.id]
+                          )
+                        }
+                        className="mt-0.5 rounded-[6px] border-gold-300"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-ink">{s.name}</span>
+                        <span className="text-xs text-muted-warm">
+                          {formatCurrency(s.price)} · {s.durationMin} min
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              {extraServices.length > 0 && (
+                <p className="text-xs font-light text-muted-warm">
+                  Visit is {durationMin} min · {formatCurrency(price)}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="space-y-2">

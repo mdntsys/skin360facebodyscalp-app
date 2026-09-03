@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { Check, HandCoins, LogIn, Pencil, Phone, X } from "lucide-react";
 
 import {
+  appointmentServiceLabel,
   formatCurrency,
   useData,
   type Appointment,
@@ -76,7 +77,6 @@ export function AppointmentDrawer({
   if (!appt) return null;
 
   const client = clientById.get(appt.clientId);
-  const service = serviceById.get(appt.serviceId);
   const staffMember = staffById.get(appt.staffId);
   const room = appt.roomId ? roomById.get(appt.roomId) : undefined;
   const start = new Date(appt.startISO);
@@ -123,7 +123,9 @@ export function AppointmentDrawer({
         {/* Details */}
         <div className="flex-1 overflow-y-auto px-6 py-2">
           <div className="divide-y divide-line/70">
-            <DetailRow label="Service">{service?.name}</DetailRow>
+            <DetailRow label="Service">
+              {appointmentServiceLabel(appt, serviceById)}
+            </DetailRow>
             <DetailRow label="Date & Time">
               {format(start, "EEE, MMM d · h:mm a")}
             </DetailRow>
