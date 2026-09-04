@@ -134,6 +134,8 @@ export interface ClientRow {
   joined_at: string;
   birthday: string | null;
   skin_notes: string | null;
+  sms_opt_in?: boolean | null;
+  sms_opt_in_at?: string | null;
 }
 
 // lastVisitISO / totalSpent / visitCount are derived from appointments and
@@ -153,6 +155,8 @@ export function mapClient(r: ClientRow): Client {
     visitCount: 0,
     birthday: r.birthday ?? undefined,
     skinNotes: r.skin_notes ?? undefined,
+    smsOptIn: Boolean(r.sms_opt_in),
+    smsOptInAt: r.sms_opt_in_at ?? undefined,
   };
 }
 

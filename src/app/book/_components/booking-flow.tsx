@@ -7,6 +7,10 @@
 // extend the same appointment block.
 
 import * as React from "react";
+import {
+  SMS_OPT_IN_LABEL,
+  smsOptInMissingPhone,
+} from "@/lib/booking/sms-consent";
 
 const TZ = "America/Los_Angeles";
 
@@ -112,6 +116,7 @@ export function BookingFlow() {
   const [email, setEmail] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [note, setNote] = React.useState("");
+  const [smsOptIn, setSmsOptIn] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [submitError, setSubmitError] = React.useState<string | null>(null);
   const [confirmed, setConfirmed] = React.useState<{ startAt: string } | null>(
@@ -174,6 +179,10 @@ export function BookingFlow() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!service || !slot) return;
+    if (smsOptInMissingPhone(smsOptIn, phone)) {
+      setSubmitError("Add a phone number so we can text you.");
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -187,7 +196,7 @@ export function BookingFlow() {
           startAt: slot.startAt,
           addonIds,
           note,
-          customer: { givenName, familyName, email, phone },
+          customer: { givenName, familyName, email, phone, smsOptIn },
         }),
       });
       const data = (await res.json()) as { startAt?: string; error?: string };
@@ -577,6 +586,17 @@ export function BookingFlow() {
             rows={2}
             className="w-full rounded-2xl border border-line bg-ivory/50 px-4 py-3 text-sm text-ink outline-none focus:border-gold-300"
           />
+          <label className="flex cursor-pointer items-start gap-3 text-sm font-light text-ink-soft">
+            <input
+              id="sms-opt-in"
+              name="smsOptIn"
+              type="checkbox"
+              checked={smsOptIn}
+              onChange={(e) => setSmsOptIn(e.target.checked)}
+              className="mt-1 size-4 shrink-0 rounded border-line accent-[#a67c34]"
+            />
+            <span>{SMS_OPT_IN_LABEL}</span>
+          </label>
           {submitError && (
             <p className="text-sm text-red-700">{submitError}</p>
           )}

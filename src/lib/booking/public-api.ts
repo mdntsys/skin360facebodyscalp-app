@@ -396,6 +396,7 @@ export async function createPublicBooking(args: {
     familyName: string;
     email: string;
     phone?: string;
+    smsOptIn?: boolean;
   };
   note?: string;
 }): Promise<CreateBookingResult> {
@@ -476,6 +477,7 @@ export async function createPublicBooking(args: {
       p_phone: args.customer.phone ?? "",
       p_note: args.note ?? "",
       p_addon_ids: addonIds,
+      p_sms_opt_in: Boolean(args.customer.smsOptIn),
     }
   );
   if (error) {

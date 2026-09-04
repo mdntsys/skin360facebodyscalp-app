@@ -149,6 +149,8 @@ export interface NewClientInput {
   homeLocation: LocationId;
   birthday?: string | null;
   skinNotes?: string | null;
+  smsOptIn?: boolean;
+  smsOptInAt?: string | null;
 }
 
 export interface ProductInput {
@@ -277,6 +279,8 @@ export interface DataContextValue extends Collections {
   ) => Promise<{ emailed: boolean; reason?: string }>;
   createClient: (input: NewClientInput) => Promise<Client>;
   updateClient: (id: string, input: Partial<NewClientInput>) => Promise<void>;
+  /** Staff can't patch clients (admin-only RLS). This RPC only sets opt-in true. */
+  recordSmsOptIn: (clientId: string) => Promise<void>;
   addClientNote: (clientId: string, text: string) => Promise<ClientNote>;
   createProduct: (input: ProductInput) => Promise<Product>;
   updateProduct: (id: string, input: ProductInput) => Promise<void>;
@@ -648,6 +652,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           home_location: input.homeLocation,
           birthday: input.birthday?.trim() ? input.birthday.trim() : null,
           skin_notes: input.skinNotes?.trim() ? input.skinNotes.trim() : null,
+          sms_opt_in: Boolean(input.smsOptIn),
+          sms_opt_in_at: input.smsOptIn
+            ? input.smsOptInAt ?? new Date().toISOString()
+            : null,
         })
         .select()
         .single();
@@ -677,6 +685,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         patch.birthday = input.birthday?.trim() ? input.birthday.trim() : null;
       if (input.skinNotes !== undefined)
         patch.skin_notes = input.skinNotes?.trim() ? input.skinNotes.trim() : null;
+      if (input.smsOptIn) {
+        patch.sms_opt_in = true;
+        patch.sms_opt_in_at = input.smsOptInAt ?? new Date().toISOString();
+      }
       const { data: row, error } = await supabase
         .from("clients")
         .update(patch)
@@ -688,6 +700,25 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setData((prev) => ({
         ...prev,
         clients: prev.clients.map((c) => (c.id === id ? updated : c)),
+      }));
+    },
+    [supabase]
+  );
+
+  const recordSmsOptIn = React.useCallback(
+    async (clientId: string) => {
+      const { error } = await supabase.rpc("record_sms_opt_in", {
+        p_client_id: clientId,
+      });
+      if (error) throw new Error(error.message);
+      const at = new Date().toISOString();
+      setData((prev) => ({
+        ...prev,
+        clients: prev.clients.map((c) =>
+          c.id === clientId
+            ? { ...c, smsOptIn: true, smsOptInAt: c.smsOptInAt ?? at }
+            : c
+        ),
       }));
     },
     [supabase]
@@ -1450,6 +1481,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       updateAppointmentStatus,
       createClient,
       updateClient,
+      recordSmsOptIn,
       addClientNote,
       createProduct,
       updateProduct,
@@ -1487,6 +1519,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     updateAppointmentStatus,
     createClient,
     updateClient,
+    recordSmsOptIn,
     addClientNote,
     createProduct,
     updateProduct,

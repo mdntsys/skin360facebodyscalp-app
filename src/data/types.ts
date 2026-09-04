@@ -81,6 +81,8 @@ export interface Client {
   visitCount: number;
   birthday?: string;
   skinNotes?: string;
+  smsOptIn?: boolean;
+  smsOptInAt?: string;
 }
 
 export type AppointmentStatus =

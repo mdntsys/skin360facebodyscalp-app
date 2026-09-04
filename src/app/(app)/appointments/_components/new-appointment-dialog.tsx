@@ -32,6 +32,10 @@ import {
   combinedPrice,
   extrasForMain,
 } from "@/lib/booking/extras";
+import {
+  SMS_OPT_IN_LABEL,
+  smsOptInMissingPhone,
+} from "@/lib/booking/sms-consent";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -132,6 +136,8 @@ export function NewAppointmentDialog({
     createAppointments,
     updateAppointment,
     createClient,
+    recordSmsOptIn,
+    clientById,
     appointments,
     timeBlocks,
     availabilityRules,
@@ -163,6 +169,7 @@ export function NewAppointmentDialog({
   const [repeatUnit, setRepeatUnit] = React.useState<RepeatUnit>("week");
   const [repeatUntil, setRepeatUntil] = React.useState("");
   const [extraServiceIds, setExtraServiceIds] = React.useState<string[]>([]);
+  const [smsOptIn, setSmsOptIn] = React.useState(false);
   // True once the front desk picks a room by hand — auto-suggestion then backs off.
   const roomTouchedRef = React.useRef(false);
 
@@ -194,6 +201,7 @@ export function NewAppointmentDialog({
       roomTouchedRef.current = true;
       setNote(appointment.note ?? "");
       setExtraServiceIds(appointment.addonServiceIds ?? []);
+      setSmsOptIn(false);
       setRepeating(false);
       setRepeatEvery("1");
       setRepeatUnit("week");
@@ -209,6 +217,7 @@ export function NewAppointmentDialog({
       roomTouchedRef.current = false;
       setNote("");
       setExtraServiceIds([]);
+      setSmsOptIn(false);
       setRepeating(false);
       setRepeatEvery("1");
       setRepeatUnit("week");
@@ -431,6 +440,7 @@ export function NewAppointmentDialog({
         phone: newPhone.trim() || undefined,
         homeLocation: locationId,
         tags: [],
+        smsOptIn: smsOptIn || undefined,
       });
       setClientId(created.id);
       setAddingClient(false);
@@ -460,6 +470,13 @@ export function NewAppointmentDialog({
       }
       if (repeatUntil < date) {
         toast.error("The end date has to be on or after the first visit.");
+        return;
+      }
+    }
+    if (!editing && smsOptIn) {
+      const phoneOnFile = clientById.get(clientId)?.phone?.trim();
+      if (smsOptInMissingPhone(true, phoneOnFile)) {
+        toast.error("Add a phone number so we can text them.");
         return;
       }
     }
@@ -501,6 +518,17 @@ export function NewAppointmentDialog({
       } else {
         const created = await createAppointment(payload);
         onCreate(created);
+      }
+      if (!editing && smsOptIn && clientId) {
+        const existing = clientById.get(clientId);
+        if (!existing?.smsOptIn) {
+          try {
+            await recordSmsOptIn(clientId);
+          } catch (err) {
+            console.error("sms opt-in save failed:", err);
+            toast.error("Booked, but we couldn't save the text opt-in.");
+          }
+        }
       }
       onOpenChange(false);
     } catch {
@@ -899,6 +927,20 @@ export function NewAppointmentDialog({
               className="min-h-20 rounded-xl border-line bg-ivory/50 px-4 py-3 text-sm font-light focus-visible:border-gold-300 focus-visible:ring-gold-200/50"
             />
           </div>
+
+          {!editing && (
+            <label className="flex cursor-pointer items-start gap-3 text-sm font-light text-ink-soft">
+              <Checkbox
+                checked={
+                  smsOptIn || Boolean(clientById.get(clientId)?.smsOptIn)
+                }
+                disabled={Boolean(clientById.get(clientId)?.smsOptIn)}
+                onCheckedChange={(v) => setSmsOptIn(v === true)}
+                className="mt-0.5 rounded-[6px] border-gold-300"
+              />
+              <span>{SMS_OPT_IN_LABEL}</span>
+            </label>
+          )}
 
           {conflicts.length > 0 && (
             <div className="space-y-1.5 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3">

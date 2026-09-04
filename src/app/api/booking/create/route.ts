@@ -20,6 +20,7 @@ interface CreateBody {
     familyName?: string;
     email?: string;
     phone?: string;
+    smsOptIn?: boolean;
   };
 }
 
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
         familyName: customer.familyName?.trim().slice(0, 100) ?? "",
         email: customer.email.trim().slice(0, 200),
         phone: customer.phone?.trim().slice(0, 30),
+        smsOptIn: customer.smsOptIn === true,
       },
     });
     return NextResponse.json(result);
