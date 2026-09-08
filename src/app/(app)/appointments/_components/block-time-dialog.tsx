@@ -5,7 +5,12 @@ import { format, parse } from "date-fns";
 import { CalendarOff } from "lucide-react";
 import { toast } from "sonner";
 
-import { useData, type LocationFilter, type LocationId } from "@/data";
+import {
+  useData,
+  type LocationFilter,
+  type LocationId,
+  type TimeBlock,
+} from "@/data";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -56,12 +61,20 @@ export function BlockTimeDialog({
   open,
   onOpenChange,
   defaultLocation,
+  lockedStaffId,
+  onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultLocation: LocationFilter;
+  /** Staff logins block their own column only — no location/room/other girls. */
+  lockedStaffId?: string;
+  onCreated?: (block: TimeBlock) => void;
 }) {
-  const { locations, staff, rooms, addTimeBlock } = useData();
+  const { locations, staff, rooms, addTimeBlock, staffById } = useData();
+  const lockedStaff = lockedStaffId
+    ? staffById.get(lockedStaffId)
+    : undefined;
 
   const [scope, setScope] = React.useState<BlockScope>("location");
   const [locationId, setLocationId] = React.useState<LocationId>("toluca");
@@ -73,12 +86,26 @@ export function BlockTimeDialog({
   const [reason, setReason] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
 
+  const locationChoices = lockedStaffId
+    ? locations.filter((l) => lockedStaff?.locations.includes(l.id))
+    : locations;
+
+  function pickLocationId(): LocationId {
+    const preferred =
+      defaultLocation === "all" ? undefined : defaultLocation;
+    if (preferred && locationChoices.some((l) => l.id === preferred)) {
+      return preferred;
+    }
+    if (lockedStaffId) return locationChoices[0]?.id ?? "valencia";
+    return preferred ?? "toluca";
+  }
+
   // Fresh form each time the dialog opens.
   React.useEffect(() => {
     if (open) {
-      setScope("location");
-      setLocationId(defaultLocation === "all" ? "toluca" : defaultLocation);
-      setStaffId("");
+      setScope(lockedStaffId ? "staff" : "location");
+      setLocationId(pickLocationId());
+      setStaffId(lockedStaffId ?? "");
       setRoomId("");
       setDate(format(new Date(), "yyyy-MM-dd"));
       setStartTime("12:00");
@@ -86,7 +113,9 @@ export function BlockTimeDialog({
       setReason("");
       setSubmitting(false);
     }
-  }, [open, defaultLocation]);
+    // pickLocationId reads locked staff locations.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultLocation, lockedStaffId]);
 
   const staffOptions = staff.filter((s) => s.locations.includes(locationId));
   const roomOptions = rooms
@@ -95,16 +124,24 @@ export function BlockTimeDialog({
 
   const endOptions = TIME_OPTIONS.filter((t) => t.value > startTime);
 
-  const scopeChosen =
-    scope === "location" ||
-    (scope === "staff" ? Boolean(staffId) : Boolean(roomId));
+  const scopeChosen = lockedStaffId
+    ? true
+    : scope === "location" ||
+      (scope === "staff" ? Boolean(staffId) : Boolean(roomId));
+  const locationOk =
+    !lockedStaff || lockedStaff.locations.includes(locationId);
   const canSubmit = Boolean(
-    date && reason.trim() && endTime > startTime && scopeChosen
+    date &&
+      reason.trim() &&
+      endTime > startTime &&
+      scopeChosen &&
+      locationOk
   );
 
   const handleLocationChange = (value: string) => {
     const next = value as LocationId;
     setLocationId(next);
+    if (lockedStaffId) return;
     const chosenStaff = staff.find((s) => s.id === staffId);
     if (chosenStaff && !chosenStaff.locations.includes(next)) setStaffId("");
     const chosenRoom = rooms.find((r) => r.id === roomId);
@@ -126,10 +163,14 @@ export function BlockTimeDialog({
     const end = parse(`${date} ${endTime}`, "yyyy-MM-dd HH:mm", new Date());
     setSubmitting(true);
     try {
-      await addTimeBlock({
+      const created = await addTimeBlock({
         locationId,
-        staffId: scope === "staff" ? staffId : undefined,
-        roomId: scope === "room" ? roomId : undefined,
+        staffId: lockedStaffId ?? (scope === "staff" ? staffId : undefined),
+        roomId: lockedStaffId
+          ? undefined
+          : scope === "room"
+            ? roomId
+            : undefined,
         startISO: start.toISOString(),
         endISO: end.toISOString(),
         reason: reason.trim(),
@@ -141,6 +182,7 @@ export function BlockTimeDialog({
         )} – ${format(end, "h:mm a")}`
       );
       onOpenChange(false);
+      onCreated?.(created);
     } catch {
       toast.error("Couldn't block this time. Please try again.");
     } finally {
@@ -156,51 +198,61 @@ export function BlockTimeDialog({
             Block Time
           </DialogTitle>
           <DialogDescription className="text-sm font-light text-muted-warm">
-            Reserve time on the calendar so nothing gets booked over it.
+            {lockedStaffId
+              ? "Reserve time on your column so nothing gets booked over it."
+              : "Reserve time on the calendar so nothing gets booked over it."}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5 px-6 py-6">
-          <div className="space-y-2">
-            <Label className={LABEL_CLASSES}>Applies to</Label>
-            <div className="flex w-full items-center rounded-full border border-line bg-ivory/50 p-1">
-              {SCOPES.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setScope(s.id)}
-                  className={cn(
-                    "h-9 flex-1 rounded-full px-2 text-xs tracking-wide transition-colors",
-                    scope === s.id
-                      ? "bg-white text-ink shadow-xs"
-                      : "text-muted-warm hover:text-ink"
-                  )}
-                >
-                  {s.label}
-                </button>
-              ))}
+          {!lockedStaffId && (
+            <div className="space-y-2">
+              <Label className={LABEL_CLASSES}>Applies to</Label>
+              <div className="flex w-full items-center rounded-full border border-line bg-ivory/50 p-1">
+                {SCOPES.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setScope(s.id)}
+                    className={cn(
+                      "h-9 flex-1 rounded-full px-2 text-xs tracking-wide transition-colors",
+                      scope === s.id
+                        ? "bg-white text-ink shadow-xs"
+                        : "text-muted-warm hover:text-ink"
+                    )}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="block-location" className={LABEL_CLASSES}>
               Location
             </Label>
-            <Select value={locationId} onValueChange={handleLocationChange}>
-              <SelectTrigger id="block-location" className={TRIGGER_CLASSES}>
-                <SelectValue placeholder="Select location" />
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {locations.map((l) => (
-                  <SelectItem key={l.id} value={l.id} className="text-sm">
-                    {l.shortName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {lockedStaffId && locationChoices.length <= 1 ? (
+              <p className="flex h-11 items-center px-1 text-sm text-ink">
+                {locationChoices[0]?.shortName ?? "Valencia"}
+              </p>
+            ) : (
+              <Select value={locationId} onValueChange={handleLocationChange}>
+                <SelectTrigger id="block-location" className={TRIGGER_CLASSES}>
+                  <SelectValue placeholder="Select location" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  {locationChoices.map((l) => (
+                    <SelectItem key={l.id} value={l.id} className="text-sm">
+                      {l.shortName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
-          {scope === "staff" && (
+          {!lockedStaffId && scope === "staff" && (
             <div className="space-y-2">
               <Label htmlFor="block-staff" className={LABEL_CLASSES}>
                 Staff Member
@@ -232,7 +284,7 @@ export function BlockTimeDialog({
             </div>
           )}
 
-          {scope === "room" && (
+          {!lockedStaffId && scope === "room" && (
             <div className="space-y-2">
               <Label htmlFor="block-room" className={LABEL_CLASSES}>
                 Room
@@ -324,7 +376,11 @@ export function BlockTimeDialog({
               id="block-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Deep clean, maintenance, staff meeting…"
+              placeholder={
+                lockedStaffId
+                  ? "Lunch, gap, don't book me…"
+                  : "Deep clean, maintenance, staff meeting…"
+              }
               className="h-11 rounded-full border-line bg-ivory/50 px-4 text-sm font-light focus-visible:border-gold-300 focus-visible:ring-gold-200/50"
             />
           </div>

@@ -1059,11 +1059,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const deleteTimeBlock = React.useCallback(
     async (id: string) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("time_blocks")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .select("id");
       if (error) throw new Error(error.message);
+      if (!data?.length) throw new Error("Time block was not deleted.");
       setData((prev) => ({
         ...prev,
         timeBlocks: prev.timeBlocks.filter((b) => b.id !== id),

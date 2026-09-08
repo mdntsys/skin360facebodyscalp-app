@@ -1,19 +1,21 @@
 "use client";
 
 // Schedule — the girls' page. A staff login lands here (and close-out).
-// They can book onto their own column (phone-ins) and check out their
-// own clients. RLS still hides other girls' money, forms, and days off.
-// The sees-all switch only widens the week view.
+// They can book onto their own column (phone-ins), block time on it, and
+// check out their own clients. RLS still hides other girls' money, forms,
+// and days off. The sees-all switch only widens the week view.
 
 import * as React from "react";
 import { addDays, addMinutes, format, isSameDay, isToday, startOfWeek } from "date-fns";
 import {
   CalendarDays,
+  CalendarOff,
   ChevronLeft,
   ChevronRight,
   MapPin,
   Plus,
   StickyNote,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,6 +24,7 @@ import {
   matchesLocation,
   useData,
   type Appointment,
+  type TimeBlock,
 } from "@/data";
 import { useLocationFilter } from "@/components/shell/location-context";
 import { PageHeader } from "@/components/shared/page-header";
@@ -30,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { AppointmentDrawer } from "../appointments/_components/appointment-drawer";
+import { BlockTimeDialog } from "../appointments/_components/block-time-dialog";
 import { NewAppointmentDialog } from "../appointments/_components/new-appointment-dialog";
 import { CheckoutDialog } from "../close-out/_components/checkout-dialog";
 
@@ -46,6 +50,8 @@ export default function SchedulePage() {
     clientById,
     clientName,
     updateAppointmentStatus,
+    timeBlocks,
+    deleteTimeBlock,
   } = useData();
   const { location } = useLocationFilter();
 
@@ -56,6 +62,7 @@ export default function SchedulePage() {
 
   const [anchor, setAnchor] = React.useState(() => new Date());
   const [bookOpen, setBookOpen] = React.useState(false);
+  const [blockOpen, setBlockOpen] = React.useState(false);
   const [selected, setSelected] = React.useState<Appointment | null>(null);
   const [checkoutFor, setCheckoutFor] = React.useState<Appointment | null>(null);
   const weekStart = startOfWeek(anchor, { weekStartsOn: 1 });
@@ -90,6 +97,26 @@ export default function SchedulePage() {
     [visible, weekEnd]
   );
   const nextUp = laterOn[0];
+
+  // Staff-specific blocks on the columns she can see. Location/room blocks
+  // stay on the admin calendar — girls only place blocks on themselves.
+  const visibleBlocks = React.useMemo(
+    () =>
+      timeBlocks
+        .filter((b) => matchesLocation(b.locationId, location))
+        .filter((b) => Boolean(b.staffId))
+        .filter((b) => seesAll || !myStaffId || b.staffId === myStaffId)
+        .sort((a, b) => a.startISO.localeCompare(b.startISO)),
+    [timeBlocks, location, seesAll, myStaffId]
+  );
+  const inWeekBlocks = React.useMemo(
+    () =>
+      visibleBlocks.filter((b) => {
+        const d = new Date(b.startISO);
+        return d >= weekStart && d < weekEnd;
+      }),
+    [visibleBlocks, weekStart, weekEnd]
+  );
 
   const unlinked = isStaff && !myStaffId && !seesAll;
 
@@ -145,6 +172,27 @@ export default function SchedulePage() {
     [appointments, clientName, updateAppointmentStatus]
   );
 
+  const handleBlocked = React.useCallback((block: TimeBlock) => {
+    setAnchor(new Date(block.startISO));
+  }, []);
+
+  const handleRemoveBlock = React.useCallback(
+    async (block: TimeBlock) => {
+      if (isStaff && block.staffId !== myStaffId) return;
+      const ok = window.confirm(
+        `Remove this time block${block.reason ? ` (${block.reason})` : ""}?`
+      );
+      if (!ok) return;
+      try {
+        await deleteTimeBlock(block.id);
+        toast.success("Time block removed");
+      } catch {
+        toast.error("Couldn't remove the time block. Please try again.");
+      }
+    },
+    [deleteTimeBlock, isStaff, myStaffId]
+  );
+
   return (
     <>
       <PageHeader
@@ -157,12 +205,18 @@ export default function SchedulePage() {
               : "Your appointments for the week ahead"
         }
         actions={
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {canBook && (
-              <Button onClick={() => setBookOpen(true)}>
-                <Plus data-icon="inline-start" strokeWidth={1.75} />
-                Book
-              </Button>
+              <>
+                <Button variant="outline" onClick={() => setBlockOpen(true)}>
+                  <CalendarOff data-icon="inline-start" strokeWidth={1.75} />
+                  Block time
+                </Button>
+                <Button onClick={() => setBookOpen(true)}>
+                  <Plus data-icon="inline-start" strokeWidth={1.75} />
+                  Book
+                </Button>
+              </>
             )}
             <Button
               variant="ghost"
@@ -204,7 +258,28 @@ export default function SchedulePage() {
             const dayAppointments = visible.filter((a) =>
               isSameDay(new Date(a.startISO), day)
             );
+            const dayBlocks = visibleBlocks.filter((b) =>
+              isSameDay(new Date(b.startISO), day)
+            );
+            const dayItems = [
+              ...dayAppointments.map((a) => ({
+                kind: "appointment" as const,
+                at: a.startISO,
+                appointment: a,
+              })),
+              ...dayBlocks.map((b) => ({
+                kind: "block" as const,
+                at: b.startISO,
+                block: b,
+              })),
+            ].sort((a, b) => a.at.localeCompare(b.at));
             const today = isToday(day);
+            const bookedLabel =
+              dayAppointments.length > 0
+                ? `${dayAppointments.length} booked`
+                : "";
+            const blockedLabel =
+              dayBlocks.length > 0 ? `${dayBlocks.length} blocked` : "";
             return (
               <Card
                 key={day.toISOString()}
@@ -231,40 +306,56 @@ export default function SchedulePage() {
                     </span>
                   ) : (
                     <span className="text-xs font-light text-muted-warm">
-                      {dayAppointments.length > 0 &&
-                        `${dayAppointments.length} booked`}
+                      {[bookedLabel, blockedLabel].filter(Boolean).join(" · ")}
                     </span>
                   )}
                 </div>
-                {dayAppointments.length === 0 ? (
+                {dayItems.length === 0 ? (
                   <p className="px-5 py-4 text-sm font-light text-muted-warm">
                     No appointments
                   </p>
                 ) : (
                   <div className="divide-y divide-line/70">
-                    {dayAppointments.map((a) => (
-                      <ScheduleRow
-                        key={a.id}
-                        appointment={a}
-                        showStaff={seesAll}
-                        clientName={clientName}
-                        serviceName={appointmentServiceLabel(a, serviceById)}
-                        staffMember={staffById.get(a.staffId)}
-                        roomName={
-                          a.roomId ? roomById.get(a.roomId)?.name : undefined
-                        }
-                        locationName={
-                          locationById.get(a.locationId)?.shortName
-                        }
-                        onOpen={() => setSelected(a)}
-                      />
-                    ))}
+                    {dayItems.map((item) =>
+                      item.kind === "appointment" ? (
+                        <ScheduleRow
+                          key={item.appointment.id}
+                          appointment={item.appointment}
+                          showStaff={seesAll}
+                          clientName={clientName}
+                          serviceName={appointmentServiceLabel(
+                            item.appointment,
+                            serviceById
+                          )}
+                          staffMember={staffById.get(item.appointment.staffId)}
+                          roomName={
+                            item.appointment.roomId
+                              ? roomById.get(item.appointment.roomId)?.name
+                              : undefined
+                          }
+                          locationName={
+                            locationById.get(item.appointment.locationId)
+                              ?.shortName
+                          }
+                          onOpen={() => setSelected(item.appointment)}
+                        />
+                      ) : (
+                        <BlockRow
+                          key={item.block.id}
+                          block={item.block}
+                          canRemove={
+                            !isStaff || item.block.staffId === myStaffId
+                          }
+                          onRemove={() => handleRemoveBlock(item.block)}
+                        />
+                      )
+                    )}
                   </div>
                 )}
               </Card>
             );
           })}
-          {inWeek.length === 0 && (
+          {inWeek.length === 0 && inWeekBlocks.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-6 text-center">
               <CalendarDays
                 className="size-5 text-muted-warm"
@@ -343,15 +434,72 @@ export default function SchedulePage() {
       )}
 
       {canBook && myStaffId && (
-        <NewAppointmentDialog
-          open={bookOpen}
-          onOpenChange={setBookOpen}
-          defaultLocation={location}
-          lockedStaffId={myStaffId}
-          onCreate={handleBooked}
-        />
+        <>
+          <NewAppointmentDialog
+            open={bookOpen}
+            onOpenChange={setBookOpen}
+            defaultLocation={location}
+            lockedStaffId={myStaffId}
+            onCreate={handleBooked}
+          />
+          <BlockTimeDialog
+            open={blockOpen}
+            onOpenChange={setBlockOpen}
+            defaultLocation={location}
+            lockedStaffId={myStaffId}
+            onCreated={handleBlocked}
+          />
+        </>
       )}
     </>
+  );
+}
+
+function BlockRow({
+  block,
+  canRemove,
+  onRemove,
+}: {
+  block: TimeBlock;
+  canRemove: boolean;
+  onRemove: () => void;
+}) {
+  const start = new Date(block.startISO);
+  const end = new Date(block.endISO);
+  return (
+    <div
+      className="flex w-full items-center gap-4 px-5 py-3.5"
+      style={{
+        backgroundImage:
+          "repeating-linear-gradient(135deg, rgba(120,113,108,0.08) 0px, rgba(120,113,108,0.08) 5px, transparent 5px, transparent 12px)",
+      }}
+    >
+      <div className="w-24 shrink-0 sm:w-32">
+        <p className="text-sm text-ink tabular-nums">{format(start, "h:mm a")}</p>
+        <p className="text-xs font-light text-muted-warm tabular-nums">
+          until {format(end, "h:mm a")}
+        </p>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-1.5 truncate text-sm text-stone-600">
+          <CalendarOff className="size-3.5 shrink-0" strokeWidth={1.75} />
+          Blocked
+        </p>
+        <p className="truncate text-xs font-light text-muted-warm">
+          {block.reason}
+        </p>
+      </div>
+      {canRemove && (
+        <button
+          type="button"
+          aria-label="Remove time block"
+          onClick={onRemove}
+          className="shrink-0 rounded-full p-1.5 text-stone-400 transition-colors hover:bg-white hover:text-red-500"
+        >
+          <X className="size-3.5" strokeWidth={1.75} />
+        </button>
+      )}
+    </div>
   );
 }
 

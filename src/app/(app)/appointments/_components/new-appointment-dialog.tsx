@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { format, parse } from "date-fns";
-import { AlertTriangle, Sparkles, UserPlus } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Sparkles, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -12,8 +12,12 @@ import {
   type LocationFilter,
   type LocationId,
   type Service,
-  type ServiceCategory,
 } from "@/data";
+import {
+  filterServiceGroups,
+  groupServicesForPicker,
+} from "@/lib/booking/service-picker";
+import { cn } from "@/lib/utils";
 import {
   findRoom,
   getConflicts,
@@ -48,11 +52,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -64,16 +71,174 @@ const TRIGGER_CLASSES =
 
 const LABEL_CLASSES = "text-xs tracking-wide uppercase text-muted-warm";
 
-function groupServices(
-  services: Service[]
-): { category: ServiceCategory; items: Service[] }[] {
-  const groups: { category: ServiceCategory; items: Service[] }[] = [];
-  for (const s of services) {
-    const group = groups.find((g) => g.category === s.category);
-    if (group) group.items.push(s);
-    else groups.push({ category: s.category, items: [s] });
-  }
-  return groups;
+function servicePriceLabel(s: Service): string {
+  return s.price === 0 ? "Free" : `$${s.price}`;
+}
+
+/** Popover instead of Select so the search field can take keystrokes. */
+function ServicePicker({
+  id,
+  services,
+  value,
+  onChange,
+  resetKey,
+}: {
+  id?: string;
+  services: Service[];
+  value: string;
+  onChange: (serviceId: string) => void;
+  /** Dialog open flag — search starts empty each time it opens or closes. */
+  resetKey: boolean;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const searchRef = React.useRef<HTMLInputElement>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const [menuWidth, setMenuWidth] = React.useState<number>();
+
+  const groups = React.useMemo(
+    () => groupServicesForPicker(services),
+    [services]
+  );
+  const filtered = React.useMemo(
+    () => filterServiceGroups(groups, query),
+    [groups, query]
+  );
+  const selected = services.find((s) => s.id === value);
+  const listId = `${id ?? "appt-service"}-list`;
+
+  React.useEffect(() => {
+    setOpen(false);
+    setQuery("");
+  }, [resetKey]);
+
+  React.useLayoutEffect(() => {
+    if (!open) return;
+    const width = triggerRef.current?.offsetWidth;
+    if (width) setMenuWidth(width);
+  }, [open]);
+
+  const pick = (serviceId: string) => {
+    onChange(serviceId);
+    setOpen(false);
+    setQuery("");
+  };
+
+  return (
+    <Popover modal open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          ref={triggerRef}
+          type="button"
+          id={id}
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-haspopup="listbox"
+          className={cn(
+            TRIGGER_CLASSES,
+            "flex items-center justify-between gap-2 text-left outline-none"
+          )}
+        >
+          {selected ? (
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate">{selected.name}</span>
+              <span className="shrink-0 text-xs font-light text-muted-warm">
+                {servicePriceLabel(selected)} · {selected.durationMin}min
+              </span>
+            </span>
+          ) : (
+            <span className="font-light text-muted-warm">Select a service</span>
+          )}
+          <ChevronDown
+            className="size-4 shrink-0 text-muted-foreground"
+            strokeWidth={1.75}
+          />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        className="z-[60] gap-0 overflow-hidden p-0 text-sm"
+        style={{ width: menuWidth }}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          searchRef.current?.focus();
+        }}
+      >
+        <div className="border-b border-line p-2">
+          <Input
+            ref={searchRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              if (!query.trim()) return;
+              const first = filtered[0]?.items[0];
+              if (first) pick(first.id);
+            }}
+            placeholder="Search treatments"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            className="h-9 rounded-full border-line bg-ivory/50 px-4 text-sm font-light focus-visible:border-gold-300 focus-visible:ring-gold-200/50"
+          />
+        </div>
+        <div
+          id={listId}
+          role="listbox"
+          aria-label="Treatments"
+          className="max-h-64 overflow-y-auto p-1"
+          onWheel={(e) => e.stopPropagation()}
+        >
+          {filtered.length === 0 ? (
+            <p className="px-3 py-6 text-center text-sm font-light text-muted-warm">
+              No treatments match.
+            </p>
+          ) : (
+            filtered.map((group) => (
+              <div key={group.heading} className="py-1">
+                <p className="px-2.5 py-1.5 text-[11px] tracking-[0.14em] text-muted-warm uppercase">
+                  {group.heading}
+                </p>
+                {group.items.map((s) => {
+                  const active = s.id === value;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => pick(s.id)}
+                      className={cn(
+                        "relative flex w-full cursor-default items-center gap-2 rounded-lg py-2 pr-8 pl-2.5 text-left text-sm outline-hidden select-none hover:bg-gold-50",
+                        active && "bg-gold-50"
+                      )}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate">{s.name}</span>
+                        <span className="shrink-0 text-xs font-light text-muted-warm">
+                          {servicePriceLabel(s)} · {s.durationMin}min
+                        </span>
+                      </span>
+                      {active && (
+                        <Check
+                          className="absolute right-2 size-4 text-gold-700"
+                          strokeWidth={1.75}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 /** Select sentinel — SelectItem values can't be empty strings. */
@@ -247,11 +412,6 @@ export function NewAppointmentDialog({
     if (!lockedStaff || lockedStaff.serviceIds.length === 0) return active;
     return active.filter((s) => lockedStaff.serviceIds.includes(s.id));
   }, [services, lockedStaff]);
-  const serviceGroups = React.useMemo(
-    () => groupServices(scopedServices),
-    [scopedServices]
-  );
-
   const service = serviceById.get(serviceId);
   const extraOptions = React.useMemo(() => {
     if (!service) return [];
@@ -632,37 +792,16 @@ export function NewAppointmentDialog({
             <Label htmlFor="appt-service" className={LABEL_CLASSES}>
               Service
             </Label>
-            <Select
+            <ServicePicker
+              id="appt-service"
+              services={scopedServices}
               value={serviceId}
-              onValueChange={(id) => {
+              resetKey={open}
+              onChange={(id) => {
                 setServiceId(id);
                 setExtraServiceIds([]);
               }}
-            >
-              <SelectTrigger id="appt-service" className={TRIGGER_CLASSES}>
-                <SelectValue placeholder="Select a service" />
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {serviceGroups.map((group) => (
-                  <SelectGroup key={group.category}>
-                    <SelectLabel className="text-[11px] tracking-[0.14em] text-muted-warm uppercase">
-                      {group.category}
-                    </SelectLabel>
-                    {group.items.map((s) => (
-                      <SelectItem key={s.id} value={s.id} className="text-sm">
-                        <span className="flex items-center gap-2">
-                          {s.name}
-                          <span className="text-xs font-light text-muted-warm">
-                            {s.price === 0 ? "Free" : `$${s.price}`} ·{" "}
-                            {s.durationMin}min
-                          </span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           {extraOptions.length > 0 && (
