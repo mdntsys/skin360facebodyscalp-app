@@ -59,11 +59,12 @@ describe("cancellation email", () => {
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
-  it("bccs nic on the client notice", async () => {
+  it("sends the client notice with no BCC", async () => {
     await sendClientCancellationNotice(base);
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
     const arg = sendEmailMock.mock.calls[0][0];
-    expect(arg.bcc).toContain("nic@midnitesystems.com");
+    expect(arg.bcc).toBeUndefined();
+    expect(arg.to).toBe("client@example.com");
     expect(arg.subject).toContain("Cancelled");
   });
 

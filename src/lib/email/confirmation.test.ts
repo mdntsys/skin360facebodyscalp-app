@@ -85,7 +85,7 @@ describe("sendClientBookingConfirmation", () => {
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
-  it("sends the confirmation and BCCs Nic", async () => {
+  it("sends the confirmation to the client with no BCC", async () => {
     const result = await sendClientBookingConfirmation({
       to: "ana@example.com",
       firstName: "Ana",
@@ -99,7 +99,7 @@ describe("sendClientBookingConfirmation", () => {
     const args = sendEmailMock.mock.calls[0][0];
     expect(args.to).toBe("ana@example.com");
     expect(args.subject).toBe("You're booked — Classic Facial");
-    expect(args.bcc).toEqual(["nic@midnitesystems.com"]);
+    expect(args.bcc).toBeUndefined();
     expect(args.html).toContain("You're booked, Ana");
   });
 });

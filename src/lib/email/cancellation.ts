@@ -5,8 +5,6 @@ import {
 } from "./confirmation";
 import { sendEmail, type EmailResult } from "./send";
 
-const NIC_BCC = ["nic@midnitesystems.com"];
-
 /** The number a cancelled client should call to rebook. */
 export function salonPhone(locationId?: string): string {
   return locationId === "toluca" ? "(818) 601-2852" : "(661) 812-6999";
@@ -97,7 +95,6 @@ export async function sendClientCancellationNotice(args: {
         staffName: args.staffName,
         locationId: args.locationId,
       }),
-      bcc: NIC_BCC,
     });
   } catch (err) {
     console.error("cancellation email failed:", err);

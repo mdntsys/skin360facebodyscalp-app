@@ -1,7 +1,6 @@
 import { sendEmail, type EmailResult } from "./send";
 
 const SALON_TZ = "America/Los_Angeles";
-const NIC_BCC = ["nic@midnitesystems.com"];
 
 export function escapeHtml(s: string): string {
   return s
@@ -97,7 +96,6 @@ export async function sendClientBookingConfirmation(args: {
         staffName: args.staffName,
         locationId: args.locationId,
       }),
-      bcc: NIC_BCC,
     });
   } catch (err) {
     console.error("booking confirmation email failed:", err);
