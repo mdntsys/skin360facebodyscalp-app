@@ -73,6 +73,8 @@ export interface ServiceRow {
   buffer_min: number | null;
   description: string;
   active: boolean;
+  addon_for?: string[] | null;
+  online_bookable?: boolean | null;
 }
 
 export function mapService(r: ServiceRow): Service {
@@ -85,6 +87,8 @@ export function mapService(r: ServiceRow): Service {
     bufferMin: Number(r.buffer_min ?? 0),
     description: r.description,
     active: r.active,
+    addonFor: r.addon_for ?? null,
+    onlineBookable: r.online_bookable !== false,
   };
 }
 

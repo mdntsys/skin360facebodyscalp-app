@@ -653,7 +653,8 @@ export function NewAppointmentDialog({
                         <span className="flex items-center gap-2">
                           {s.name}
                           <span className="text-xs font-light text-muted-warm">
-                            ${s.price} · {s.durationMin}min
+                            {s.price === 0 ? "Free" : `$${s.price}`} ·{" "}
+                            {s.durationMin}min
                           </span>
                         </span>
                       </SelectItem>

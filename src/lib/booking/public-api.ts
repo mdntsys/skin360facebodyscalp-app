@@ -250,6 +250,7 @@ export async function listPublicServices(): Promise<{
   const services: PublicService[] = [];
   const addons: PublicAddon[] = [];
   for (const s of data.services) {
+    if (s.onlineBookable === false) continue;
     const performers = performersForService(data, s.id);
     if (performers.length === 0) continue; // nobody performs it -> not bookable
     if (s.addonFor && s.addonFor.length > 0) {
@@ -402,7 +403,11 @@ export async function createPublicBooking(args: {
 }): Promise<CreateBookingResult> {
   const data = await getPublicBookingData();
   const service = data.serviceById.get(args.serviceVariationId);
-  if (!service || (service.addonFor && service.addonFor.length > 0))
+  if (
+    !service ||
+    service.onlineBookable === false ||
+    (service.addonFor && service.addonFor.length > 0)
+  )
     throw new BookingError("Unknown service.");
   const addonIds = [...new Set(args.addonIds ?? [])];
   const addons: Service[] = [];

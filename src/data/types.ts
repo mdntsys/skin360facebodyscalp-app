@@ -37,6 +37,8 @@ export interface Service {
   addonFor?: string[] | null;
   /** False for retired services kept for history. Absent = active. */
   active?: boolean;
+  /** False = in-app only (not on public /book). Absent = online. */
+  onlineBookable?: boolean;
 }
 
 export type EmploymentType = "owner" | "admin" | "employee" | "contractor-1099";
