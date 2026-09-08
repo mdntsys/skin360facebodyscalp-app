@@ -24,6 +24,7 @@ export function groupServicesForPicker(services: Service[]): ServicePickerGroup[
   const post: Service[] = [];
   const rest: Service[] = [];
   for (const s of services) {
+    if (s.active === false) continue;
     if (isPostCosmeticService(s)) post.push(s);
     else rest.push(s);
   }

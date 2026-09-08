@@ -101,7 +101,9 @@ export function ServicesSection() {
         )}
         <div className="space-y-8">
           {SERVICE_CATEGORIES.map((cat) => {
-            const items = services.filter((s) => s.category === cat);
+            const items = services.filter(
+              (s) => s.category === cat && s.active !== false
+            );
             if (items.length === 0) return null;
             return (
               <div key={cat}>

@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { Appointment } from "../../data/types";
 import {
   computeSlots,
+  isOnPublicMenu,
   performersForService,
   type PublicBookingData,
 } from "./public-api";
@@ -70,6 +71,15 @@ const MON = { startAt: "2027-08-09T00:00:00-07:00", endAt: "2027-08-10T00:00:00-
 /** Epoch ms of an ISO string — engine slots come back as UTC ISO strings. */
 const ms = (iso: string) => new Date(iso).getTime();
 
+describe("isOnPublicMenu", () => {
+  it("hides retired and in-app-only services", () => {
+    expect(isOnPublicMenu({})).toBe(true);
+    expect(isOnPublicMenu({ onlineBookable: false })).toBe(false);
+    expect(isOnPublicMenu({ active: false })).toBe(false);
+    expect(isOnPublicMenu({ active: true, onlineBookable: true })).toBe(true);
+  });
+});
+
 describe("performersForService", () => {
   it("scopes girls to their specialties; empty list means performs all", () => {
     const data = mkData();
@@ -89,6 +99,19 @@ describe("computeSlots", () => {
     });
     expect(slots.length).toBeGreaterThan(0);
     expect(ms(slots[0].startAt)).toBe(ms("2027-08-04T10:00:00-07:00"));
+  });
+
+  it("offers no slots for a retired service", () => {
+    const data = mkData();
+    data.serviceById.set("svc-facial", {
+      ...data.serviceById.get("svc-facial")!,
+      active: false,
+    });
+    const slots = computeSlots(data, [], {
+      serviceVariationId: "svc-facial",
+      ...MON,
+    });
+    expect(slots).toEqual([]);
   });
 
   it("never offers Karen a facial, even on a day she works", () => {

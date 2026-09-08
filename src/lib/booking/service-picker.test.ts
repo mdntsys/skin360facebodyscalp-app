@@ -78,6 +78,23 @@ describe("isPostCosmeticService", () => {
 });
 
 describe("groupServicesForPicker", () => {
+  it("drops retired services so the $199 Customized Facial cannot reappear", () => {
+    const groups = groupServicesForPicker([
+      facial,
+      svc({
+        id: "svc-customized-facial",
+        name: "Customized Facial",
+        category: "Facials",
+        price: 199,
+        durationMin: 75,
+        active: false,
+      }),
+    ]);
+    expect(groups).toEqual([
+      { heading: "Facials", items: [facial] },
+    ]);
+  });
+
   const groups = groupServicesForPicker([
     facial,
     lymphatic,

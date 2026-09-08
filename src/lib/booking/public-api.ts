@@ -231,6 +231,13 @@ export interface PublicStaff {
   role: string;
 }
 
+/** Retired or in-app-only services never appear on /book. */
+export function isOnPublicMenu(
+  s: Pick<Service, "active" | "onlineBookable">
+): boolean {
+  return s.active !== false && s.onlineBookable !== false;
+}
+
 /** Add-on: only offered after a main service in one of `addonFor`'s categories. */
 export interface PublicAddon {
   variationId: string;
@@ -250,7 +257,7 @@ export async function listPublicServices(): Promise<{
   const services: PublicService[] = [];
   const addons: PublicAddon[] = [];
   for (const s of data.services) {
-    if (s.onlineBookable === false) continue;
+    if (!isOnPublicMenu(s)) continue;
     const performers = performersForService(data, s.id);
     if (performers.length === 0) continue; // nobody performs it -> not bookable
     if (s.addonFor && s.addonFor.length > 0) {
@@ -317,7 +324,12 @@ export function computeSlots(
   }
 ): BridgeSlot[] {
   const main = data.serviceById.get(args.serviceVariationId);
-  if (!main || (main.addonFor && main.addonFor.length > 0)) return [];
+  if (
+    !main ||
+    !isOnPublicMenu(main) ||
+    (main.addonFor && main.addonFor.length > 0)
+  )
+    return [];
   const addonIds = [...new Set(args.addonIds ?? [])];
   const addons: Service[] = [];
   for (const id of addonIds) {
@@ -405,7 +417,7 @@ export async function createPublicBooking(args: {
   const service = data.serviceById.get(args.serviceVariationId);
   if (
     !service ||
-    service.onlineBookable === false ||
+    !isOnPublicMenu(service) ||
     (service.addonFor && service.addonFor.length > 0)
   )
     throw new BookingError("Unknown service.");

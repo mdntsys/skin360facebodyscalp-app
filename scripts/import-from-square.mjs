@@ -169,6 +169,10 @@ async function fetchCatalog() {
   return { items, categories };
 }
 
+// Square leftover. The live menu is Signature Customized Facial $295.
+// Keep the row for history, but never re-import it as a bookable service.
+const RETIRED_SQUARE_NAMES = new Set(["customizedfacial"]);
+
 const warnings = [];
 const locs = await api("GET", "/v2/locations");
 const locationId = (locs.locations ?? [])[0]?.id;
@@ -206,6 +210,17 @@ for (const item of items) {
     const vName = cleanName(hasVariationName ? `${d.name} — ${vd.name}` : d.name);
     const durationMin = vd.service_duration ? Math.round(vd.service_duration / 60000) : null;
     const priceCents = vd.price_money?.amount ?? null;
+    if (RETIRED_SQUARE_NAMES.has(norm(vName))) {
+      // Map Square bookings onto the retired row; do not reactivate it.
+      variationMap[v.id] = {
+        serviceId: "svc-customized-facial",
+        category: category ?? "Facials",
+        priceCents,
+        durationMin,
+      };
+      warnings.push(`Skipped retired Square leftover (kept for history): ${vName}`);
+      continue;
+    }
     const matched = EXISTING_BY_NORM.get(norm(vName)) ?? (variations.length === 1 ? EXISTING_BY_NORM.get(norm(cleanName(d.name))) : undefined);
     if (!category && !matched) {
       warnings.push(`SKIPPED service (unmapped Square category "${squareCat}"): ${vName}`);
@@ -250,6 +265,7 @@ const stale = EXISTING_SERVICES.map(([id]) => id).filter((id) => !matchedIds.has
 if (stale.length) {
   catalogSql += `\n-- App services with no Square counterpart — hide from the menu.\nupdate services set active = false where id in (${stale.map(q).join(", ")});\n`;
 }
+catalogSql += `\n-- Retired leftover: site/menu is Signature Customized Facial $295. Keep the row for history.\nupdate services set active = false, online_bookable = false where id = 'svc-customized-facial';\n`;
 catalogSql += `\n-- Re-scope the girls' capabilities now that the full menu exists.\nupdate staff set service_ids = (select coalesce(array_agg(id), '{}') from services where category = 'Body' and active)\n  where id in ('staff-karen', 'staff-catalina');\nupdate staff set service_ids = (select coalesce(array_agg(id), '{}') from services where category in ('Facials', 'Face Add-Ons') and active)\n  where id in ('staff-josseline', 'staff-gloria');\nupdate staff set service_ids = (select coalesce(array_agg(id), '{}') from services where category = 'Scalp' and active)\n  where id = 'staff-dom';\nupdate staff set service_ids = (select coalesce(array_agg(id), '{}') from services where category in ('Nails', 'Lash + Brow + Wax') and active)\n  where id = 'staff-cassie';\nupdate staff set service_ids = (select coalesce(array_agg(id), '{}') from services where category = 'Nails' and active and name ~* 'manicure|pedicure|mani' and name !~* 'full nail set|nail fill')\n  where id = 'staff-vero';\n`;
 
 // --- 2. Bookings -------------------------------------------------------------
