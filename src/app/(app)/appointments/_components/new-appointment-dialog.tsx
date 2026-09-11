@@ -38,6 +38,8 @@ import {
 } from "@/lib/booking/extras";
 import {
   SMS_OPT_IN_LABEL,
+  SMS_PRIVACY_URL,
+  SMS_TERMS_URL,
   smsOptInMissingPhone,
 } from "@/lib/booking/sms-consent";
 import { Button } from "@/components/ui/button";
@@ -1078,7 +1080,28 @@ export function NewAppointmentDialog({
                 onCheckedChange={(v) => setSmsOptIn(v === true)}
                 className="mt-0.5 rounded-[6px] border-gold-300"
               />
-              <span>{SMS_OPT_IN_LABEL}</span>
+              <span>
+                {SMS_OPT_IN_LABEL}
+                <span className="mt-1 block text-xs text-muted-warm">
+                  <a
+                    href={SMS_PRIVACY_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline underline-offset-2 hover:text-gold-600"
+                  >
+                    Privacy
+                  </a>
+                  {" · "}
+                  <a
+                    href={SMS_TERMS_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline underline-offset-2 hover:text-gold-600"
+                  >
+                    Terms
+                  </a>
+                </span>
+              </span>
             </label>
           )}
 

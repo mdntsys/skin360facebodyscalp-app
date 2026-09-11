@@ -9,6 +9,8 @@
 import * as React from "react";
 import {
   SMS_OPT_IN_LABEL,
+  SMS_PRIVACY_URL,
+  SMS_TERMS_URL,
   smsOptInMissingPhone,
 } from "@/lib/booking/sms-consent";
 
@@ -595,7 +597,28 @@ export function BookingFlow() {
               onChange={(e) => setSmsOptIn(e.target.checked)}
               className="mt-1 size-4 shrink-0 rounded border-line accent-[#a67c34]"
             />
-            <span>{SMS_OPT_IN_LABEL}</span>
+            <span>
+              {SMS_OPT_IN_LABEL}
+              <span className="mt-1 block text-xs text-muted-warm">
+                <a
+                  href={SMS_PRIVACY_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2 hover:text-gold-600"
+                >
+                  Privacy
+                </a>
+                {" · "}
+                <a
+                  href={SMS_TERMS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2 hover:text-gold-600"
+                >
+                  Terms
+                </a>
+              </span>
+            </span>
           </label>
           {submitError && (
             <p className="text-sm text-red-700">{submitError}</p>
