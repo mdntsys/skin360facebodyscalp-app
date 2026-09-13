@@ -18,7 +18,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AccountCard } from "./_components/account-card";
 import { BookingPolicyCard } from "./_components/booking-policy-card";
 import { RoomsSection } from "./_components/rooms-section";
-import { ServicesSection } from "./_components/services-section";
 import { StaffLoginsCard } from "./_components/staff-logins-card";
 import { TeamSection } from "./_components/team-section";
 
@@ -63,7 +62,7 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Business profile, locations, rooms, team, services, and booking policy"
+        subtitle="Business profile, locations, rooms, team, and booking policy"
       />
 
       <Tabs defaultValue="business">
@@ -80,9 +79,6 @@ export default function SettingsPage() {
             </TabsTrigger>
             <TabsTrigger value="team" className={tabTriggerClass}>
               Team
-            </TabsTrigger>
-            <TabsTrigger value="services" className={tabTriggerClass}>
-              Services
             </TabsTrigger>
             <TabsTrigger value="booking" className={tabTriggerClass}>
               Booking
@@ -224,10 +220,6 @@ export default function SettingsPage() {
         </TabsContent>
 
         {/* ---------- Services ---------- */}
-        <TabsContent value="services" className="mt-4">
-          <ServicesSection />
-        </TabsContent>
-
         {/* ---------- Booking policy ---------- */}
         <TabsContent value="booking" className="mt-4">
           <BookingPolicyCard />

@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -107,7 +106,7 @@ const fieldClass =
   "h-10 rounded-full border-line bg-ivory/50 px-4 text-sm focus-visible:border-gold-300";
 const labelClass = "text-xs tracking-wide uppercase text-muted-warm";
 
-function AddServiceDialog({
+export function AddServiceDialog({
   open,
   onOpenChange,
 }: {
@@ -280,22 +279,14 @@ function AddServiceDialog({
 
 export function ServicesSection() {
   const { services } = useData();
-  const [addOpen, setAddOpen] = React.useState(false);
 
   return (
     <Card className="max-w-3xl border-line bg-white shadow-xs">
       <CardContent className="p-6 sm:p-8">
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-          <p className="text-xs font-light text-muted-warm">
-            Wind-down buffer: room and provider stay reserved this long after
-            the service.
-          </p>
-          <Button type="button" onClick={() => setAddOpen(true)}>
-            <Plus data-icon="inline-start" strokeWidth={1.75} />
-            Add service
-          </Button>
-        </div>
-        <AddServiceDialog open={addOpen} onOpenChange={setAddOpen} />
+        <p className="mb-6 text-xs font-light text-muted-warm">
+          Wind-down buffer: room and provider stay reserved this long after
+          the service.
+        </p>
         {services.length === 0 && (
           <p className="py-8 text-center text-sm font-light text-muted-warm">
             No services on the menu yet.

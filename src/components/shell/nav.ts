@@ -10,6 +10,7 @@ import {
   Package,
   Receipt,
   Settings,
+  Sparkles,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -40,6 +41,7 @@ export const navItems: NavItem[] = [
   { label: "Availability", href: "/availability", icon: CalendarClock },
   { label: "Clients", href: "/clients", icon: Users },
   { label: "Forms", href: "/forms", icon: ClipboardList },
+  { label: "Services", href: "/services", icon: Sparkles },
   { label: "Inventory", href: "/inventory", icon: Package },
   { label: "Memberships", href: "/memberships", icon: Gem },
   { label: "Packages", href: "/packages", icon: Gift },
