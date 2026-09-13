@@ -4,6 +4,7 @@ import * as React from "react";
 import { parseISO } from "date-fns";
 
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
+import { serviceIdFromName } from "@/lib/booking/service-id";
 import {
   mapAppointment,
   mapAppSettings,
@@ -105,6 +106,16 @@ export interface NewAppointmentInput {
   note?: string;
   roomId?: string | null;
   addonServiceIds?: string[];
+}
+
+export interface NewServiceInput {
+  name: string;
+  category: ServiceCategory;
+  price: number;
+  durationMin: number;
+  description?: string;
+  bufferMin?: number;
+  onlineBookable?: boolean;
 }
 
 export interface RoomInput {
@@ -315,6 +326,7 @@ export interface DataContextValue extends Collections {
     id: string,
     input: { bufferMin?: number; price?: number; durationMin?: number }
   ) => Promise<void>;
+  createService: (input: NewServiceInput) => Promise<Service>;
   updateAppSettings: (input: Partial<AppSettings>) => Promise<void>;
   recordCheckout: (input: CheckoutInput) => Promise<Payment>;
   sellPackage: (input: SellPackageInput) => Promise<ClientPackage>;
@@ -1136,6 +1148,83 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [supabase]
   );
 
+  const createService = React.useCallback(
+    async (input: NewServiceInput) => {
+      const { data: existing, error: existingError } = await supabase
+        .from("services")
+        .select("id");
+      if (existingError) throw new Error(existingError.message);
+      const id = serviceIdFromName(
+        input.name,
+        (existing ?? []).map((r: { id: string }) => r.id)
+      );
+      const { data: row, error } = await supabase
+        .from("services")
+        .insert({
+          id,
+          name: input.name.trim(),
+          category: input.category,
+          price: input.price,
+          duration_min: input.durationMin,
+          buffer_min: input.bufferMin ?? 15,
+          description: input.description?.trim() ?? "",
+          active: true,
+          online_bookable: input.onlineBookable !== false,
+          addon_for: null,
+        })
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      const created = mapService(row as ServiceRow);
+
+      const { data: staffRows, error: staffError } = await supabase
+        .from("staff")
+        .select("*");
+      if (staffError) throw new Error(staffError.message);
+      const mappedStaff = ((staffRows ?? []) as StaffRow[]).map(mapStaff);
+      // Performers: anyone who already does this category (empty list = all).
+      const { data: allServices } = await supabase
+        .from("services")
+        .select("id, category");
+      const idsInCategory = new Set(
+        ((allServices ?? []) as { id: string; category: string }[])
+          .filter((s) => s.category === input.category)
+          .map((s) => s.id)
+      );
+
+      const staffPatches: StaffMember[] = [];
+      for (const member of mappedStaff) {
+        if (!member.bookable || member.serviceIds.length === 0) continue;
+        const doesCategory = member.serviceIds.some((sid) =>
+          idsInCategory.has(sid)
+        );
+        if (!doesCategory || member.serviceIds.includes(created.id)) continue;
+        const nextIds = [...member.serviceIds, created.id];
+        const { data: patched, error: patchError } = await supabase
+          .from("staff")
+          .update({ service_ids: nextIds })
+          .eq("id", member.id)
+          .select()
+          .single();
+        if (patchError) throw new Error(patchError.message);
+        staffPatches.push(mapStaff(patched as StaffRow));
+      }
+
+      setData((prev) => {
+        const patchedById = new Map(staffPatches.map((s) => [s.id, s]));
+        return {
+          ...prev,
+          services: [...prev.services, created].sort((a, b) =>
+            a.name.localeCompare(b.name)
+          ),
+          allStaff: prev.allStaff.map((s) => patchedById.get(s.id) ?? s),
+        };
+      });
+      return created;
+    },
+    [supabase]
+  );
+
   const updateAppSettings = React.useCallback(
     async (input: Partial<AppSettings>) => {
       const patch: Record<string, unknown> = { id: 1 };
@@ -1500,6 +1589,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       deleteTimeBlock,
       updateStaff,
       updateService,
+      createService,
       updateAppSettings,
       recordCheckout,
       sellPackage,
@@ -1538,6 +1628,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     deleteTimeBlock,
     updateStaff,
     updateService,
+    createService,
     updateAppSettings,
     recordCheckout,
     sellPackage,

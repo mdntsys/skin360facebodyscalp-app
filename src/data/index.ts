@@ -16,6 +16,7 @@ export type {
   NewOverrideInput,
   NewPackageInput,
   NewPlanInput,
+  NewServiceInput,
   NewTimeBlockInput,
   Profile,
   ProductInput,
