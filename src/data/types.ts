@@ -59,6 +59,10 @@ export interface StaffMember {
   notifyByEmail?: boolean;
   employmentType: EmploymentType;
   serviceIds: string[]; // empty = performs all services
+  /** Fraction of checked-out service amount (0.45 = 45%). Editable in Team. */
+  commissionRate: number;
+  /** Fraction of tips (1 = 100%). Editable in Team. */
+  tipRate: number;
 }
 
 export type ClientTag =

@@ -320,6 +320,8 @@ export interface DataContextValue extends Collections {
       onlineBookable?: boolean;
       notifyByEmail?: boolean;
       employmentType?: EmploymentType;
+      commissionRate?: number;
+      tipRate?: number;
     }
   ) => Promise<void>;
   updateService: (
@@ -1095,6 +1097,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         onlineBookable?: boolean;
         notifyByEmail?: boolean;
         employmentType?: EmploymentType;
+        commissionRate?: number;
+        tipRate?: number;
       }
     ) => {
       const patch: Record<string, unknown> = {};
@@ -1106,6 +1110,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         patch.notify_by_email = input.notifyByEmail;
       if (input.employmentType !== undefined)
         patch.employment_type = input.employmentType;
+      if (input.commissionRate !== undefined)
+        patch.commission_rate = input.commissionRate;
+      if (input.tipRate !== undefined) patch.tip_rate = input.tipRate;
       const { data: row, error } = await supabase
         .from("staff")
         .update(patch)

@@ -170,6 +170,8 @@ function toEngineStaff(s: PublicStaffRow): StaffMember {
     bookable: s.bookable,
     employmentType: "contractor-1099",
     serviceIds: s.serviceIds ?? [],
+    commissionRate: 0,
+    tipRate: 1,
   };
 }
 

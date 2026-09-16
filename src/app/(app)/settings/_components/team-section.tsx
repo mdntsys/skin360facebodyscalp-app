@@ -24,6 +24,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
 const SERVICE_CATEGORIES: ServiceCategory[] = [
@@ -194,9 +196,125 @@ function CapabilitiesDialog({
   );
 }
 
+function PayRatesDialog({
+  open,
+  onOpenChange,
+  member,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  member: StaffMember;
+}) {
+  const { updateStaff } = useData();
+  const [submitting, setSubmitting] = React.useState(false);
+  const [commission, setCommission] = React.useState("");
+  const [tips, setTips] = React.useState("");
+
+  React.useEffect(() => {
+    if (!open) return;
+    setCommission(String(Math.round((member.commissionRate ?? 0) * 100)));
+    setTips(String(Math.round((member.tipRate ?? 1) * 100)));
+  }, [open, member]);
+
+  async function handleSave() {
+    const c = Number(commission);
+    const t = Number(tips);
+    if (!Number.isFinite(c) || c < 0 || c > 100) {
+      toast.error("Service percent must be between 0 and 100.");
+      return;
+    }
+    if (!Number.isFinite(t) || t < 0 || t > 100) {
+      toast.error("Tip percent must be between 0 and 100.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await updateStaff(member.id, {
+        commissionRate: c / 100,
+        tipRate: t / 100,
+      });
+      toast.success(`${member.name}'s pay rates saved.`);
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Couldn't save pay rates."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="rounded-3xl bg-white p-6 sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-heading text-2xl font-medium text-ink">
+            Pay rates · {member.name}
+          </DialogTitle>
+          <DialogDescription className="text-sm font-light text-muted-warm">
+            Used on the commission report. Service percent is of the amount
+            checked out. Tips are separate.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label className="text-xs tracking-wide uppercase text-muted-warm">
+              Service %
+            </Label>
+            <div className="relative">
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={commission}
+                onChange={(e) => setCommission(e.target.value)}
+                className="h-10 rounded-full border-line bg-ivory/50 pr-8 pl-4 text-sm"
+              />
+              <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-warm">
+                %
+              </span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs tracking-wide uppercase text-muted-warm">
+              Tips %
+            </Label>
+            <div className="relative">
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={tips}
+                onChange={(e) => setTips(e.target.value)}
+                className="h-10 rounded-full border-line bg-ivory/50 pr-8 pl-4 text-sm"
+              />
+              <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-warm">
+                %
+              </span>
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="mt-4">
+          <DialogClose asChild>
+            <Button type="button" variant="outline" disabled={submitting}>
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button type="button" disabled={submitting} onClick={handleSave}>
+            {submitting ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function TeamMemberRow({ member }: { member: StaffMember }) {
   const { serviceById, locationById, updateStaff } = useData();
   const [editorOpen, setEditorOpen] = React.useState(false);
+  const [payOpen, setPayOpen] = React.useState(false);
   const [savingOnline, setSavingOnline] = React.useState(false);
   const [savingNotify, setSavingNotify] = React.useState(false);
 
@@ -237,6 +355,9 @@ function TeamMemberRow({ member }: { member: StaffMember }) {
           {member.bookable ? "Takes appointments" : "Not bookable"}
           {member.bookable && member.onlineBookable === false
             ? " · in-app only (hidden online)"
+            : ""}
+          {member.bookable
+            ? ` · ${Math.round((member.commissionRate ?? 0) * 100)}% service, ${Math.round((member.tipRate ?? 1) * 100)}% tips`
             : ""}
         </p>
         {member.bookable && (
@@ -307,6 +428,16 @@ function TeamMemberRow({ member }: { member: StaffMember }) {
           variant="outline"
           size="sm"
           className="shrink-0"
+          onClick={() => setPayOpen(true)}
+        >
+          Pay
+        </Button>
+      )}
+      {member.bookable && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
           onClick={() => setEditorOpen(true)}
         >
           <Pencil data-icon="inline-start" strokeWidth={1.75} />
@@ -314,6 +445,11 @@ function TeamMemberRow({ member }: { member: StaffMember }) {
         </Button>
       )}
 
+      <PayRatesDialog
+        open={payOpen}
+        onOpenChange={setPayOpen}
+        member={member}
+      />
       <CapabilitiesDialog
         open={editorOpen}
         onOpenChange={setEditorOpen}

@@ -106,6 +106,8 @@ export interface StaffRow {
   notify_by_email?: boolean;
   employment_type: string | null;
   service_ids: string[] | null;
+  commission_rate?: number | string | null;
+  tip_rate?: number | string | null;
 }
 
 export function mapStaff(r: StaffRow): StaffMember {
@@ -124,6 +126,8 @@ export function mapStaff(r: StaffRow): StaffMember {
     employmentType: (r.employment_type ??
       "employee") as StaffMember["employmentType"],
     serviceIds: r.service_ids ?? [],
+    commissionRate: Number(r.commission_rate ?? 0),
+    tipRate: Number(r.tip_rate ?? 1),
   };
 }
 

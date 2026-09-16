@@ -8,10 +8,8 @@ import {
   differenceInCalendarDays,
   endOfMonth,
   endOfQuarter,
-  endOfWeek,
   format,
   getQuarter,
-  isSameDay,
   isSameMonth,
   parseISO,
   startOfWeek,
@@ -66,10 +64,16 @@ import { toast } from "sonner";
 
 import {
   formatCurrency,
-  revenueTrend,
   useData,
   type PaymentMethod,
 } from "@/data";
+import { commissionForRange } from "@/lib/reports/commission";
+import {
+  daysInRange,
+  isoInRange,
+  ReportRangeProvider,
+  useReportRange,
+} from "@/lib/reports/range";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
@@ -90,6 +94,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -178,10 +183,13 @@ function EmptyRow({
 }
 
 function ReportControls() {
-  const [range, setRange] = React.useState("last-30");
+  const { from, to, preset, setPreset, setFrom, setTo } = useReportRange();
   return (
-    <>
-      <Select value={range} onValueChange={setRange}>
+    <div className="flex flex-wrap items-center gap-2">
+      <Select
+        value={preset}
+        onValueChange={(v) => setPreset(v as typeof preset)}
+      >
         <SelectTrigger className="w-[150px]">
           <SelectValue />
         </SelectTrigger>
@@ -190,8 +198,24 @@ function ReportControls() {
           <SelectItem value="this-month">This month</SelectItem>
           <SelectItem value="last-30">Last 30 days</SelectItem>
           <SelectItem value="last-90">Last 90 days</SelectItem>
+          <SelectItem value="custom">Specific dates</SelectItem>
         </SelectContent>
       </Select>
+      <Input
+        type="date"
+        value={from}
+        onChange={(e) => setFrom(e.target.value)}
+        className="h-9 w-[150px] rounded-full border-line bg-white px-3 text-sm"
+        aria-label="From date"
+      />
+      <span className="text-xs text-muted-warm">to</span>
+      <Input
+        type="date"
+        value={to}
+        onChange={(e) => setTo(e.target.value)}
+        className="h-9 w-[150px] rounded-full border-line bg-white px-3 text-sm"
+        aria-label="To date"
+      />
       <Button
         variant="outline"
         onClick={() => toast("Export is available in the full release")}
@@ -199,7 +223,7 @@ function ReportControls() {
         <Download data-icon="inline-start" strokeWidth={1.75} />
         Export CSV
       </Button>
-    </>
+    </div>
   );
 }
 
@@ -212,7 +236,11 @@ const salesChartConfig = {
 } satisfies ChartConfig;
 
 function SalesReport() {
-  const { appointments, payments, clientName } = useData();
+  const { payments: allPayments, clientName } = useData();
+  const { start, endExclusive, label } = useReportRange();
+  const payments = allPayments.filter((p) =>
+    isoInRange(p.dateISO, start, endExclusive)
+  );
 
   // Tips belong to the girls, not the salon — keep them out of gross.
   const gross = round2(payments.reduce((s, p) => s + p.total - p.tip, 0));
@@ -221,7 +249,15 @@ function SalesReport() {
   const net = round2(gross - taxTotal);
   const avgTicket = payments.length ? gross / payments.length : 0;
 
-  const daily = revenueTrend(appointments, payments, 14);
+  const daily = daysInRange(start, endExclusive).map((d) => ({
+    date: d.date,
+    label: d.label,
+    revenue: round2(
+      payments
+        .filter((p) => isoInRange(p.dateISO, d.day, addDays(d.day, 1)))
+        .reduce((s, p) => s + p.total - p.tip, 0)
+    ),
+  }));
 
   const rows = [...payments].sort(
     (a, b) => new Date(b.dateISO).getTime() - new Date(a.dateISO).getTime()
@@ -259,7 +295,7 @@ function SalesReport() {
 
       <SectionCard
         title="Daily Revenue"
-        hint="Last 14 days · completed appointments & other sales"
+        hint={`${label} · checked-out sales`}
         className="mt-6"
       >
         <ChartContainer config={salesChartConfig} className="h-64 w-full">
@@ -369,15 +405,12 @@ const appointmentsChartConfig = {
 } satisfies ChartConfig;
 
 function AppointmentsReport() {
-  const { appointments, clientName, serviceById, staffById } = useData();
-
-  const now = new Date();
-  const weekStartsAt = startOfWeek(now, { weekStartsOn: 1 });
-  const weekEndsAt = endOfWeek(now, { weekStartsOn: 1 });
-  const thisWeek = appointments.filter((a) => {
-    const d = new Date(a.startISO);
-    return d >= weekStartsAt && d <= weekEndsAt;
-  });
+  const { appointments: allAppointments, clientName, serviceById, staffById } =
+    useData();
+  const { start, endExclusive, label } = useReportRange();
+  const thisWeek = allAppointments.filter((a) =>
+    isoInRange(a.startISO, start, endExclusive)
+  );
 
   const completed = thisWeek.filter((a) => a.status === "completed");
   const cancelled = thisWeek.filter((a) => a.status === "cancelled");
@@ -401,7 +434,7 @@ function AppointmentsReport() {
           label="Total Appointments"
           value={thisWeek.length}
           icon={CalendarDays}
-          hint="This week · both locations"
+          hint={`${label} · both locations`}
         />
         <StatCard
           label="Completed"
@@ -427,7 +460,7 @@ function AppointmentsReport() {
 
       <SectionCard
         title="Appointments by Weekday"
-        hint="This week · Monday through Sunday"
+        hint={label}
         className="mt-6"
       >
         <ChartContainer
@@ -461,7 +494,7 @@ function AppointmentsReport() {
 
       <SectionCard
         title="Appointment History"
-        hint="Every visit on the books this week"
+        hint={`Every visit on the books ${label}`}
         className="mt-6"
         scrollX
       >
@@ -480,7 +513,7 @@ function AppointmentsReport() {
           <TableBody>
             {rows.length === 0 && (
               <EmptyRow colSpan={7}>
-                No appointments on the books this week.
+                No appointments on the books for these dates.
               </EmptyRow>
             )}
             {rows.map((a) => {
@@ -527,24 +560,25 @@ const retailChartConfig = {
 } satisfies ChartConfig;
 
 function RetailSalesReport() {
-  const { payments, clientName } = useData();
+  const { payments: allPayments, clientName } = useData();
+  const { start, endExclusive, label } = useReportRange();
+  const payments = allPayments.filter((p) =>
+    isoInRange(p.dateISO, start, endExclusive)
+  );
 
   const retail = payments.filter((p) => p.kind === "retail");
   const revenue = round2(retail.reduce((s, p) => s + p.subtotal, 0));
   const avgSale = retail.length ? revenue / retail.length : 0;
   const largest = [...retail].sort((a, b) => b.subtotal - a.subtotal)[0];
 
-  const daily = Array.from({ length: 14 }, (_, i) => {
-    const day = subDays(new Date(), 13 - i);
-    return {
-      label: format(day, "MMM d"),
-      revenue: round2(
-        retail
-          .filter((p) => isSameDay(new Date(p.dateISO), day))
-          .reduce((s, p) => s + p.subtotal, 0)
-      ),
-    };
-  });
+  const daily = daysInRange(start, endExclusive).map((d) => ({
+    label: d.label,
+    revenue: round2(
+      retail
+        .filter((p) => isoInRange(p.dateISO, d.day, addDays(d.day, 1)))
+        .reduce((s, p) => s + p.subtotal, 0)
+    ),
+  }));
 
   const rows = [...retail].sort(
     (a, b) => new Date(b.dateISO).getTime() - new Date(a.dateISO).getTime()
@@ -586,7 +620,7 @@ function RetailSalesReport() {
 
       <SectionCard
         title="Retail Revenue by Day"
-        hint="Last 14 days · retail transactions only"
+        hint={`${label} · retail transactions only`}
         className="mt-6"
       >
         <ChartContainer config={retailChartConfig} className="h-64 w-full">
@@ -677,7 +711,11 @@ const taxChartConfig = {
 } satisfies ChartConfig;
 
 function SalesTaxReport() {
-  const { payments } = useData();
+  const { payments: allPayments } = useData();
+  const { start, endExclusive, label } = useReportRange();
+  const payments = allPayments.filter((p) =>
+    isoInRange(p.dateISO, start, endExclusive)
+  );
 
   const now = new Date();
   const taxed = payments.filter((p) => p.tax > 0);
@@ -1007,7 +1045,11 @@ const methodKey: Record<PaymentMethod, "card" | "cash" | "gift" | "credit"> = {
 };
 
 function TransactionDetailReport() {
-  const { payments, clientName } = useData();
+  const { payments: allPayments, clientName } = useData();
+  const { start, endExclusive } = useReportRange();
+  const payments = allPayments.filter((p) =>
+    isoInRange(p.dateISO, start, endExclusive)
+  );
 
   interface TxnLine {
     key: string;
@@ -1408,7 +1450,11 @@ function MostValuableClientsReport() {
 /* ------------------------------------------------------------------ */
 
 function ExpensesReport() {
-  const { expenses } = useData();
+  const { expenses: allExpenses } = useData();
+  const { start, endExclusive, label } = useReportRange();
+  const expenses = allExpenses.filter((e) =>
+    isoInRange(e.dateISO, start, endExclusive)
+  );
 
   const total = round2(expenses.reduce((s, e) => s + e.amount, 0));
 
@@ -1584,76 +1630,74 @@ function ExpensesReport() {
 /* ------------------------------------------------------------------ */
 
 const commissionChartConfig = {
-  revenue: { label: "Service revenue", color: "var(--chart-2)" },
-  commission: { label: "Commission (40%)", color: "var(--chart-1)" },
+  commission: { label: "Service pay", color: "var(--chart-1)" },
+  tips: { label: "Tips", color: "var(--chart-2)" },
 } satisfies ChartConfig;
 
 function CommissionEarningsReport() {
-  const { staff, appointments } = useData();
+  const { staff, appointments, payments } = useData();
+  const { start, endExclusive, label } = useReportRange();
 
-  const now = new Date();
-  const weekStartsAt = startOfWeek(now, { weekStartsOn: 1 });
-  const weekEndsAt = endOfWeek(now, { weekStartsOn: 1 });
-
-  const rows = staff.map((s) => {
-    const done = appointments.filter((a) => {
-      if (a.staffId !== s.id || a.status !== "completed") return false;
-      const d = new Date(a.startISO);
-      return d >= weekStartsAt && d <= weekEndsAt;
-    });
-    const revenue = done.reduce((sum, a) => sum + a.price, 0);
-    const rate = s.role.toLowerCase().includes("owner") ? 0 : 0.4;
-    return {
-      id: s.id,
-      name: s.name,
-      role: s.role,
-      services: done.length,
-      revenue,
-      rate,
-      commission: round2(revenue * rate),
-    };
-  });
-  const ranked = rows
-    .filter((r) => r.rate > 0)
-    .sort((a, b) => b.commission - a.commission);
+  const rows = commissionForRange(
+    payments,
+    appointments,
+    staff,
+    start,
+    endExclusive
+  );
+  const ranked = rows.filter((r) => r.totalPay > 0 || r.commissionRate > 0);
+  const totalPay = round2(rows.reduce((s, r) => s + r.totalPay, 0));
   const totalCommission = round2(rows.reduce((s, r) => s + r.commission, 0));
-  const commissionableRevenue = ranked.reduce((s, r) => s + r.revenue, 0);
+  const totalTips = round2(rows.reduce((s, r) => s + r.tipPay, 0));
+  const outstanding = rows.reduce((s, r) => s + r.outstandingCount, 0);
 
-  const chartData = rows.map((r) => ({
+  const chartData = ranked.map((r) => ({
     name: r.name.split(" ")[0],
-    revenue: r.revenue,
     commission: r.commission,
+    tips: r.tipPay,
   }));
 
   return (
     <>
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard
-          label="Commission Owed"
-          value={formatCurrency(totalCommission)}
+          label="Pay owed"
+          value={formatCurrency(totalPay)}
           icon={HandCoins}
-          hint="Completed services this week"
+          hint={`${label}${outstanding ? ` · ${outstanding} not checked out` : ""}`}
         />
-        {ranked.slice(0, 2).map((r) => (
-          <StatCard
-            key={r.id}
-            label={r.name}
-            value={formatCurrency(r.commission)}
-            icon={Percent}
-            hint={`${r.services} service${r.services === 1 ? "" : "s"} · 40% rate`}
-          />
-        ))}
         <StatCard
-          label="Commissionable Revenue"
-          value={formatCurrency(commissionableRevenue)}
-          icon={DollarSign}
-          hint="Excludes owner services"
+          label="Service pay"
+          value={formatCurrency(totalCommission)}
+          icon={Percent}
+          hint="Each girl's percent of checked-out services"
         />
+        <StatCard
+          label="Tips"
+          value={formatCurrency(totalTips)}
+          icon={Banknote}
+          hint="Girls keep their tip percent (100% unless you change it)"
+        />
+        {ranked[0] ? (
+          <StatCard
+            label={ranked[0].name}
+            value={formatCurrency(ranked[0].totalPay)}
+            icon={DollarSign}
+            hint={`${Math.round(ranked[0].commissionRate * 100)}% + tips`}
+          />
+        ) : (
+          <StatCard
+            label="Top earner"
+            value={formatCurrency(0)}
+            icon={DollarSign}
+            hint="No checkouts in this range"
+          />
+        )}
       </div>
 
       <SectionCard
         title="Earnings by Staff"
-        hint="Completed service revenue vs. commission"
+        hint={`Checked-out services ${label}`}
         className="mt-6"
       >
         {chartData.length === 0 ? (
@@ -1697,16 +1741,18 @@ function CommissionEarningsReport() {
               />
               <ChartLegend content={<ChartLegendContent />} />
               <Bar isAnimationActive={false}
-                dataKey="revenue"
-                fill="var(--color-revenue)"
-                radius={[6, 6, 0, 0]}
-                maxBarSize={36}
-              />
-              <Bar isAnimationActive={false}
                 dataKey="commission"
                 fill="var(--color-commission)"
                 radius={[6, 6, 0, 0]}
                 maxBarSize={36}
+                stackId="pay"
+              />
+              <Bar isAnimationActive={false}
+                dataKey="tips"
+                fill="var(--color-tips)"
+                radius={[6, 6, 0, 0]}
+                maxBarSize={36}
+                stackId="pay"
               />
             </BarChart>
           </ChartContainer>
@@ -1715,52 +1761,63 @@ function CommissionEarningsReport() {
 
       <SectionCard
         title="Commission Detail"
-        hint="Based on completed appointments this week"
+        hint={`Checked-out visits ${label}. Change percents in Settings → Team.`}
         className="mt-6"
         scrollX
       >
-        <Table className="min-w-[640px]">
+        <Table className="min-w-[720px]">
           <TableHeader>
             <TableRow>
               <TableHead>Staff</TableHead>
-              <TableHead className="text-right">Services Performed</TableHead>
-              <TableHead className="text-right">Service Revenue</TableHead>
+              <TableHead className="text-right">Checked out</TableHead>
+              <TableHead className="text-right">Service $</TableHead>
               <TableHead className="text-right">Rate</TableHead>
-              <TableHead className="text-right">Commission</TableHead>
+              <TableHead className="text-right">Service pay</TableHead>
+              <TableHead className="text-right">Tips</TableHead>
+              <TableHead className="text-right">Total pay</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 && (
-              <EmptyRow colSpan={5}>No bookable staff yet.</EmptyRow>
+              <EmptyRow colSpan={7}>No bookable staff yet.</EmptyRow>
             )}
             {rows.map((r) => (
-              <TableRow key={r.id}>
+              <TableRow key={r.staffId}>
                 <TableCell>
                   <span className="block whitespace-nowrap">{r.name}</span>
                   <span className="block text-xs font-light text-muted-warm">
                     {r.role}
+                    {r.outstandingCount
+                      ? ` · ${r.outstandingCount} not checked out`
+                      : ""}
                   </span>
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {r.services}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
-                  {formatCurrency(r.revenue)}
+                  {formatCurrency(r.serviceTotal)}
                 </TableCell>
                 <TableCell className="text-right whitespace-nowrap text-ink-soft">
-                  {r.rate > 0 ? "40%" : "0% · owner"}
+                  {Math.round(r.commissionRate * 100)}%
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {formatCurrency(r.commission, { cents: true })}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {formatCurrency(r.tipPay, { cents: true })}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {formatCurrency(r.totalPay, { cents: true })}
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
         <p className="mt-4 text-xs font-light text-muted-warm">
-          Commission is modeled at 40% of completed service revenue for
-          estheticians. Owners are compensated via draw — no commission
-          applies.
+          Service pay is each girl&apos;s percent of what was checked out.
+          Tips use her tip percent (100% unless you change it). Visits not
+          checked out are listed but not paid.
         </p>
       </SectionCard>
     </>
@@ -1777,6 +1834,7 @@ const timesheetChartConfig = {
 
 function TimesheetsReport() {
   const { staff } = useData();
+  const { label } = useReportRange();
 
   const weekStartsAt = startOfWeek(new Date(), { weekStartsOn: 1 });
   const weekEndsAt = addDays(weekStartsAt, 5); // Mon – Sat
@@ -1798,7 +1856,7 @@ function TimesheetsReport() {
           label="Total Hours"
           value={totalHours}
           icon={Clock}
-          hint={`${format(weekStartsAt, "MMM d")} – ${format(weekEndsAt, "MMM d")} · this week`}
+          hint={label}
         />
         {perStaff.slice(0, 3).map((p) => (
           <StatCard
@@ -1813,7 +1871,7 @@ function TimesheetsReport() {
 
       <SectionCard
         title="Hours by Staff"
-        hint="Clocked hours · this week"
+        hint={`Clocked hours · ${label}`}
         className="mt-6"
       >
         {chartData.length === 0 ? (
@@ -1989,7 +2047,7 @@ export default function ReportDetailPage({
   const Body = report.body;
 
   return (
-    <>
+    <ReportRangeProvider>
       <BackToReports />
       <PageHeader
         title={report.title}
@@ -1997,6 +2055,6 @@ export default function ReportDetailPage({
         actions={<ReportControls />}
       />
       <Body />
-    </>
+    </ReportRangeProvider>
   );
 }

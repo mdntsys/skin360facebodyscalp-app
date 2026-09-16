@@ -501,10 +501,10 @@ describe("availableSlots", () => {
 
   it("filters staff by capability (serviceIds empty = all) and bookable", () => {
     const staff: StaffMember[] = [
-      { id: "staff-a", name: "A", role: "", initials: "A", color: "", locations: ["valencia"], email: "", phone: "", bookable: true, employmentType: "employee", serviceIds: [] },
-      { id: "staff-b", name: "B", role: "", initials: "B", color: "", locations: ["valencia"], email: "", phone: "", bookable: true, employmentType: "employee", serviceIds: ["svc-facial"] },
-      { id: "staff-c", name: "C", role: "", initials: "C", color: "", locations: ["valencia"], email: "", phone: "", bookable: true, employmentType: "employee", serviceIds: ["svc-mani"] },
-      { id: "staff-d", name: "D", role: "", initials: "D", color: "", locations: ["valencia"], email: "", phone: "", bookable: false, employmentType: "admin", serviceIds: [] },
+      { id: "staff-a", name: "A", role: "", initials: "A", color: "", locations: ["valencia"], email: "", phone: "", bookable: true, employmentType: "employee", serviceIds: [], commissionRate: 0, tipRate: 1 },
+      { id: "staff-b", name: "B", role: "", initials: "B", color: "", locations: ["valencia"], email: "", phone: "", bookable: true, employmentType: "employee", serviceIds: ["svc-facial"], commissionRate: 0, tipRate: 1 },
+      { id: "staff-c", name: "C", role: "", initials: "C", color: "", locations: ["valencia"], email: "", phone: "", bookable: true, employmentType: "employee", serviceIds: ["svc-mani"], commissionRate: 0, tipRate: 1 },
+      { id: "staff-d", name: "D", role: "", initials: "D", color: "", locations: ["valencia"], email: "", phone: "", bookable: false, employmentType: "admin", serviceIds: [], commissionRate: 0, tipRate: 1 },
     ];
     const ctx = makeCtx({
       staff,
