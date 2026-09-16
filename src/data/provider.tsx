@@ -106,6 +106,8 @@ export interface NewAppointmentInput {
   note?: string;
   roomId?: string | null;
   addonServiceIds?: string[];
+  /** Send a booking text if the client opted in. Email still always goes. */
+  notifySms?: boolean;
 }
 
 export interface NewServiceInput {
@@ -524,12 +526,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  const notifyBooked = React.useCallback(async (appointmentId: string) => {
+  const notifyBooked = React.useCallback(
+    async (appointmentId: string, notifySms?: boolean) => {
     try {
       const res = await fetch("/api/appointments/notify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appointmentId }),
+        body: JSON.stringify({
+          appointmentId,
+          ...(notifySms === undefined ? {} : { notifySms }),
+        }),
       });
       if (!res.ok) {
         console.error("appointment confirmation email failed:", res.status);
@@ -553,7 +559,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         appointments: [...prev.appointments, created].sort(byStart),
       }));
       // Best-effort — the appointment is on the calendar either way.
-      void notifyBooked(created.id);
+      void notifyBooked(created.id, input.notifySms);
       return created;
     },
     [supabase, notifyBooked]
@@ -575,7 +581,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         appointments: [...prev.appointments, ...created].sort(byStart),
       }));
-      if (created[0]) void notifyBooked(created[0].id);
+      if (created[0]) void notifyBooked(created[0].id, inputs[0]?.notifySms);
       return created;
     },
     [supabase, createAppointment, notifyBooked]

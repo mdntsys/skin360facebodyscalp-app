@@ -10,6 +10,7 @@ import {
   sendSalonCancellationNotice,
 } from "@/lib/email/cancellation";
 import { sendStaffBookingNotice } from "@/lib/email/staff-notify";
+import { sendAppointmentSms } from "@/lib/sms/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,8 @@ interface NotifyBody {
   appointmentId?: string;
   /** "booked" is the confirmation. "cancelled" is the call-off notice. */
   kind?: "booked" | "cancelled";
+  /** When set, send a text for this booking. Email still always tries. */
+  notifySms?: boolean;
 }
 
 export async function POST(request: Request) {
@@ -62,7 +65,7 @@ export async function POST(request: Request) {
     await Promise.all([
       supabase
         .from("clients")
-        .select("first_name, last_name, email, phone")
+        .select("first_name, last_name, email, phone, sms_opt_in")
         .eq("id", appt.client_id)
         .single(),
       supabase.from("services").select("name").eq("id", appt.service_id).single(),
@@ -100,8 +103,26 @@ export async function POST(request: Request) {
     locationId: appt.location_id,
   };
 
+  const optedIn = client.sms_opt_in === true;
+  const sendSms =
+    kind === "cancelled"
+      ? optedIn
+      : body.notifySms === true || (body.notifySms !== false && optedIn);
+
   if (kind === "cancelled") {
     const result = await sendClientCancellationNotice(shared);
+    if (sendSms) {
+      await sendAppointmentSms({
+        kind: "cancelled",
+        phone: client.phone,
+        optedIn: true,
+        firstName: client.first_name ?? "",
+        serviceName: service.name,
+        startAt: appt.start_at,
+        staffName: staffFirstName(staff?.name),
+        locationId: appt.location_id,
+      });
+    }
 
     // Carolina already knows about the ones she cancels herself. Copy her
     // only when a girl called it off from her own schedule.
@@ -141,6 +162,18 @@ export async function POST(request: Request) {
   }
 
   const result = await sendClientBookingConfirmation(shared);
+  if (sendSms) {
+    await sendAppointmentSms({
+      kind: "booked",
+      phone: client.phone,
+      optedIn: true,
+      firstName: client.first_name ?? "",
+      serviceName: service.name,
+      startAt: appt.start_at,
+      staffName: staffFirstName(staff?.name),
+      locationId: appt.location_id,
+    });
+  }
 
   // Tell the girl too, unless she's the one who just booked it.
   const { data: booker } = await supabase

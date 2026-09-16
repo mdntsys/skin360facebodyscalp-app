@@ -40,6 +40,7 @@ import {
   sendClientBookingConfirmation,
 } from "../email/confirmation";
 import { sendStaffBookingNotice } from "../email/staff-notify";
+import { sendAppointmentSms } from "../sms/notify";
 
 const LOCATION_ID: LocationId = "valencia";
 
@@ -533,6 +534,18 @@ export async function createPublicBooking(args: {
     staffName,
     locationId: LOCATION_ID,
   });
+  if (args.customer.smsOptIn) {
+    await sendAppointmentSms({
+      kind: "booked",
+      phone: args.customer.phone,
+      optedIn: true,
+      firstName: args.customer.givenName,
+      serviceName: service.name,
+      startAt: result.startAt,
+      staffName,
+      locationId: LOCATION_ID,
+    });
+  }
 
   // Salon copy so Carolina sees the booking without opening the app.
   // Default is the yahoo inbox replies already go to. Not a blast to the girls.

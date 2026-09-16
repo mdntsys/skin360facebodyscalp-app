@@ -337,6 +337,7 @@ export function NewAppointmentDialog({
   const [repeatUntil, setRepeatUntil] = React.useState("");
   const [extraServiceIds, setExtraServiceIds] = React.useState<string[]>([]);
   const [smsOptIn, setSmsOptIn] = React.useState(false);
+  const [notifySms, setNotifySms] = React.useState(false);
   // True once the front desk picks a room by hand — auto-suggestion then backs off.
   const roomTouchedRef = React.useRef(false);
 
@@ -369,6 +370,7 @@ export function NewAppointmentDialog({
       setNote(appointment.note ?? "");
       setExtraServiceIds(appointment.addonServiceIds ?? []);
       setSmsOptIn(false);
+      setNotifySms(false);
       setRepeating(false);
       setRepeatEvery("1");
       setRepeatUnit("week");
@@ -385,6 +387,7 @@ export function NewAppointmentDialog({
       setNote("");
       setExtraServiceIds([]);
       setSmsOptIn(false);
+      setNotifySms(false);
       setRepeating(false);
       setRepeatEvery("1");
       setRepeatUnit("week");
@@ -399,6 +402,12 @@ export function NewAppointmentDialog({
     // defaultLocationId reads locationChoices from locked staff.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultLocation, appointment, lockedStaffId]);
+
+  React.useEffect(() => {
+    if (!open || editing || !clientId) return;
+    const c = clientById.get(clientId);
+    if (c?.smsOptIn && c.phone?.trim()) setNotifySms(true);
+  }, [open, editing, clientId, clientById]);
 
   const sortedClients = React.useMemo(
     () =>
@@ -656,6 +665,7 @@ export function NewAppointmentDialog({
       note: userNote,
       roomId: chosenRoomId ?? null,
       addonServiceIds: extraServiceIds,
+      notifySms: !editing && notifySms,
     };
     try {
       if (appointment) {
@@ -1077,7 +1087,12 @@ export function NewAppointmentDialog({
                   smsOptIn || Boolean(clientById.get(clientId)?.smsOptIn)
                 }
                 disabled={Boolean(clientById.get(clientId)?.smsOptIn)}
-                onCheckedChange={(v) => setSmsOptIn(v === true)}
+                onCheckedChange={(v) => {
+                  const on = v === true;
+                  setSmsOptIn(on);
+                  if (on) setNotifySms(true);
+                  else setNotifySms(false);
+                }}
                 className="mt-0.5 rounded-[6px] border-gold-300"
               />
               <span>
@@ -1126,6 +1141,29 @@ export function NewAppointmentDialog({
                 exceptions.
               </p>
             </div>
+          )}
+
+          {!editing && (
+            <label className="flex cursor-pointer items-start gap-3 text-sm font-light text-ink-soft">
+              <Checkbox
+                checked={notifySms}
+                disabled={
+                  !(smsOptIn || Boolean(clientById.get(clientId)?.smsOptIn)) ||
+                  smsOptInMissingPhone(
+                    true,
+                    clientById.get(clientId)?.phone ?? newPhone
+                  )
+                }
+                onCheckedChange={(v) => setNotifySms(v === true)}
+                className="mt-0.5 rounded-[6px] border-gold-300"
+              />
+              <span>
+                Also send a text
+                <span className="mt-0.5 block text-xs text-muted-warm">
+                  Email always goes when they have an address
+                </span>
+              </span>
+            </label>
           )}
 
           <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
