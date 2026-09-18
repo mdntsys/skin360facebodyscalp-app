@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { staffFirstName } from "@/lib/email/confirmation";
 import { sendAppointmentSms } from "@/lib/sms/notify";
+import { salonYmd, tomorrowSalonYmd } from "@/lib/sms/when";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -24,20 +25,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ sent: 0, reason: "no-admin" });
   }
 
-  const laYmd = (iso: string) =>
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/Los_Angeles",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date(iso));
-  const todayLa = laYmd(new Date().toISOString());
-  const [y, m, d] = todayLa.split("-").map(Number);
-  const tomorrowLa = new Date(Date.UTC(y, m - 1, d + 1))
-    .toISOString()
-    .slice(0, 10);
+  const tomorrowLa = tomorrowSalonYmd();
   const windowStart = new Date().toISOString();
-  const windowEnd = new Date(Date.now() + 40 * 60 * 60 * 1000).toISOString();
+  const windowEnd = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
 
   const { data: rows, error } = await supabase
     .from("appointments")
@@ -57,7 +47,7 @@ export async function GET(request: Request) {
   let sent = 0;
   let skipped = 0;
   for (const appt of rows ?? []) {
-    if (laYmd(appt.start_at) !== tomorrowLa) {
+    if (salonYmd(appt.start_at) !== tomorrowLa) {
       skipped += 1;
       continue;
     }

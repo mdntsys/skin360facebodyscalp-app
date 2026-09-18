@@ -1,12 +1,17 @@
-const SALON_TZ = "America/Los_Angeles";
+import { salonDateParts } from "./when";
+
 const GSM_LIMIT = 160;
 
 export function toGsmSafe(s: string): string {
   return s
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
     .replace(/[—–]/g, "-")
     .replace(/[’‘]/g, "'")
     .replace(/[“”]/g, '"')
-    .replace(/\u00a0/g, " ");
+    .replace(/[\u00a0\u202f\u2007\u2009\u200a]/g, " ")
+    .replace(/[^\x09\x0a\x0d\x20-\x7e]/g, "")
+    .replace(/ {2,}/g, " ");
 }
 
 function clip(s: string, max: number): string {
@@ -16,32 +21,12 @@ function clip(s: string, max: number): string {
   return `${t.slice(0, Math.max(1, max - 1)).trimEnd()}-`;
 }
 
-function parts(startAt: string) {
-  const d = new Date(startAt);
-  const weekday = new Intl.DateTimeFormat("en-US", {
-    timeZone: SALON_TZ,
-    weekday: "short",
-  }).format(d);
-  const monthDay = new Intl.DateTimeFormat("en-US", {
-    timeZone: SALON_TZ,
-    month: "short",
-    day: "numeric",
-  }).format(d);
-  const time = new Intl.DateTimeFormat("en-US", {
-    timeZone: SALON_TZ,
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  })
-    .format(d)
-    .replace(" ", "")
-    .toLowerCase();
-  return { weekday, monthDay, time };
-}
-
 function fit(prefix: string, middle: string, suffix: string): string {
-  const budget = GSM_LIMIT - prefix.length - suffix.length;
-  return toGsmSafe(prefix + clip(middle, Math.max(4, budget)) + suffix);
+  const p = toGsmSafe(prefix);
+  const m = toGsmSafe(middle);
+  const s = toGsmSafe(suffix);
+  const budget = GSM_LIMIT - p.length - s.length;
+  return p + clip(m, Math.max(4, budget)) + s;
 }
 
 export function salonSmsPhone(locationId?: string): string {
@@ -54,9 +39,9 @@ export function bookedSms(args: {
   startAt: string;
   staffName: string;
 }): string {
-  const name = args.firstName.trim() || "there";
-  const { weekday, monthDay, time } = parts(args.startAt);
-  const staff = args.staffName.trim() || "us";
+  const name = toGsmSafe(args.firstName).trim() || "there";
+  const { weekday, monthDay, time } = salonDateParts(args.startAt);
+  const staff = toGsmSafe(args.staffName).trim() || "us";
   return fit(
     `Skin 360: Hi ${name}, you're booked ${weekday} ${monthDay} at ${time} with ${staff} for `,
     args.serviceName,
@@ -71,9 +56,9 @@ export function reminderSms(args: {
   staffName: string;
   locationId?: string;
 }): string {
-  const name = args.firstName.trim() || "there";
-  const { time } = parts(args.startAt);
-  const staff = args.staffName.trim() || "us";
+  const name = toGsmSafe(args.firstName).trim() || "there";
+  const { time } = salonDateParts(args.startAt);
+  const staff = toGsmSafe(args.staffName).trim() || "us";
   const phone = salonSmsPhone(args.locationId);
   return fit(
     `Skin 360: Reminder, ${name}, tomorrow ${time} with ${staff}: `,
@@ -86,7 +71,7 @@ export function cancelledSms(args: {
   startAt: string;
   locationId?: string;
 }): string {
-  const { weekday, monthDay, time } = parts(args.startAt);
+  const { weekday, monthDay, time } = salonDateParts(args.startAt);
   const phone = salonSmsPhone(args.locationId);
   return toGsmSafe(
     `Skin 360: ${weekday} ${monthDay} ${time} is cancelled. Rebook at app.skin360facebodyscalp.com/book or ${phone}. Reply STOP to opt out.`
@@ -98,5 +83,5 @@ export function smsLength(body: string): number {
 }
 
 export function isSingleSegment(body: string): boolean {
-  return smsLength(body) <= GSM_LIMIT;
+  return toGsmSafe(body).length <= GSM_LIMIT;
 }
