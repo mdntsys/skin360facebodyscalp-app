@@ -12,6 +12,7 @@ function isPublicBookingPath(path: string): boolean {
     path.startsWith("/f/") ||
     path.startsWith("/api/booking/") ||
     path.startsWith("/api/gift-cards/") ||
+    path.startsWith("/api/cron/") ||
     path === "/api/forms/submit"
   );
 }
