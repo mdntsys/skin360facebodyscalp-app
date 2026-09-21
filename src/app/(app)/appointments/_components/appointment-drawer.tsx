@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { format } from "date-fns";
-import { Check, HandCoins, LogIn, Pencil, Phone, X } from "lucide-react";
+import { Check, HandCoins, LogIn, Mail, Pencil, Phone, X } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   appointmentServiceLabel,
@@ -63,6 +64,7 @@ export function AppointmentDrawer({
     useData();
   const updateStatus = onUpdateStatus;
   const [confirmingCancel, setConfirmingCancel] = React.useState(false);
+  const [resending, setResending] = React.useState(false);
 
   // Drop back out of "are you sure" when the sheet closes or moves on.
   React.useEffect(() => {
@@ -73,6 +75,47 @@ export function AppointmentDrawer({
   const lastRef = React.useRef<Appointment | null>(null);
   if (appointment) lastRef.current = appointment;
   const appt = appointment ?? lastRef.current;
+
+  async function resendConfirmation(id: string) {
+    if (resending) return;
+    setResending(true);
+    try {
+      const res = await fetch("/api/appointments/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId: id, kind: "booked", resend: true }),
+      });
+      const data = (await res.json()) as {
+        emailed?: boolean;
+        texted?: boolean;
+        skipped?: string[];
+        error?: string;
+      };
+      if (!res.ok) {
+        toast.error(data.error || "Couldn't resend that.");
+        return;
+      }
+      if (data.emailed && data.texted) {
+        toast.success("Confirmation emailed and texted.");
+      } else if (data.emailed) {
+        toast.success(
+          data.skipped?.includes("not-opted-in")
+            ? "Confirmation emailed. No text — they didn't opt in."
+            : data.skipped?.includes("no-phone")
+              ? "Confirmation emailed. No text — no phone on file."
+              : "Confirmation emailed."
+        );
+      } else if (data.texted) {
+        toast.success("Text sent. No email on file.");
+      } else {
+        toast.error("Nothing sent. Check their email and phone.");
+      }
+    } catch {
+      toast.error("Couldn't resend that.");
+    } finally {
+      setResending(false);
+    }
+  }
 
   if (!appt) return null;
 
@@ -165,6 +208,17 @@ export function AppointmentDrawer({
           (appt.status === "confirmed" || appt.status === "checked-in") &&
           (onCheckout || updateStatus) && (
             <div className="space-y-2 border-t border-line bg-ivory/50 px-6 py-5">
+              {!confirmingCancel && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={resending}
+                  onClick={() => resendConfirmation(appt.id)}
+                >
+                  <Mail data-icon="inline-start" strokeWidth={1.75} />
+                  {resending ? "Sending…" : "Resend confirmation"}
+                </Button>
+              )}
               {onCheckout && !checkedOut && !confirmingCancel && (
                 <Button
                   className="w-full"
@@ -217,6 +271,17 @@ export function AppointmentDrawer({
 
         {updateStatus && mode === "full" && (
           <div className="space-y-2 border-t border-line bg-ivory/50 px-6 py-5">
+            {(appt.status === "confirmed" || appt.status === "checked-in") && (
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={resending}
+                onClick={() => resendConfirmation(appt.id)}
+              >
+                <Mail data-icon="inline-start" strokeWidth={1.75} />
+                {resending ? "Sending…" : "Resend confirmation"}
+              </Button>
+            )}
             {appt.status === "confirmed" && (
               <>
                 <Button

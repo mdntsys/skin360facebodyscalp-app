@@ -11,6 +11,7 @@ import {
 } from "@/lib/email/cancellation";
 import { sendStaffBookingNotice } from "@/lib/email/staff-notify";
 import { sendAppointmentSms } from "@/lib/sms/notify";
+import { resendPlan } from "@/lib/appointments/resend";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,8 @@ interface NotifyBody {
   kind?: "booked" | "cancelled";
   /** When set, send a text for this booking. Email still always tries. */
   notifySms?: boolean;
+  /** From the appointment sheet. Do not also email the girl again. */
+  resend?: boolean;
 }
 
 export async function POST(request: Request) {
@@ -104,8 +107,15 @@ export async function POST(request: Request) {
   };
 
   const optedIn = client.sms_opt_in === true;
-  const sendSms =
-    kind === "cancelled"
+  const plan = resendPlan({
+    status: appt.status,
+    email: client.email,
+    phone: client.phone,
+    smsOptIn: optedIn,
+  });
+  const sendSms = body.resend
+    ? plan.sms
+    : kind === "cancelled"
       ? optedIn
       : body.notifySms === true || (body.notifySms !== false && optedIn);
 
@@ -162,8 +172,9 @@ export async function POST(request: Request) {
   }
 
   const result = await sendClientBookingConfirmation(shared);
+  let texted = false;
   if (sendSms) {
-    await sendAppointmentSms({
+    const sms = await sendAppointmentSms({
       kind: "booked",
       phone: client.phone,
       optedIn: true,
@@ -172,6 +183,16 @@ export async function POST(request: Request) {
       startAt: appt.start_at,
       staffName: staffFirstName(staff?.name),
       locationId: appt.location_id,
+    });
+    texted = sms.sent;
+  }
+
+  if (body.resend) {
+    return NextResponse.json({
+      sent: result.sent,
+      emailed: result.sent,
+      texted,
+      skipped: plan.skipped,
     });
   }
 
