@@ -55,6 +55,7 @@ export default async function PublicFormPage({
     <FillClient
       token={token}
       firstName={request.firstName}
+      fullName={request.fullName}
       template={request.template}
     />
   );

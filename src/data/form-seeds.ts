@@ -29,6 +29,7 @@ export const FORM_SEEDS: FormTemplate[] = [
         {
           title: "Client Information",
           fields: [
+            { key: "client_name", type: "text", label: "Name" },
             { key: "date_of_birth", type: "date", label: "Date of birth", half: true },
             { key: "age", type: "text", label: "Age", half: true },
             { key: "gender", type: "radio", label: "Gender", options: ["Female", "Male", "NB"] },
@@ -165,6 +166,7 @@ export const FORM_SEEDS: FormTemplate[] = [
         {
           title: "Client Information",
           fields: [
+            { key: "client_name", type: "text", label: "Name" },
             { key: "date_of_birth", type: "date", label: "Date of birth", half: true },
             { key: "gender", type: "radio", label: "Gender", options: ["Female", "Male", "NB"] },
             { key: "address", type: "text", label: "Address" },
@@ -245,6 +247,7 @@ export const FORM_SEEDS: FormTemplate[] = [
         {
           title: "Client Information",
           fields: [
+            { key: "client_name", type: "text", label: "Name" },
             { key: "date_of_birth", type: "date", label: "Date of birth", half: true },
             { key: "emergency_contact", type: "text", label: "Emergency contact name & number", half: true },
           ],
@@ -324,6 +327,7 @@ export const FORM_SEEDS: FormTemplate[] = [
         {
           title: "Personal Information",
           fields: [
+            { key: "client_name", type: "text", label: "Name" },
             { key: "date_of_birth", type: "date", label: "Date of birth", half: true },
             { key: "age", type: "text", label: "Age", half: true },
             { key: "address", type: "text", label: "Address" },
@@ -384,6 +388,7 @@ export const FORM_SEEDS: FormTemplate[] = [
         {
           title: "Release Agreement",
           fields: [
+            { key: "client_name", type: "text", label: "Name" },
             {
               key: "release",
               type: "statement",

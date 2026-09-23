@@ -28,7 +28,12 @@ export function FormFiller({
   onCancel,
 }: FormFillerProps) {
   const { submitForm, clientName } = useData();
-  const [answers, setAnswers] = React.useState<Record<string, unknown>>({});
+  // Prefill the name from the profile — she picked the client already, and a
+  // signed form should carry a printed name without anyone retyping it. Still
+  // editable, for a legal name that differs from what's on the profile.
+  const [answers, setAnswers] = React.useState<Record<string, unknown>>(() => ({
+    client_name: `${client.firstName} ${client.lastName}`.trim(),
+  }));
   const [signature, setSignature] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
 

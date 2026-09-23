@@ -14,11 +14,20 @@ import { SignaturePad } from "@/components/forms/signature-pad";
 interface FillClientProps {
   token: string;
   firstName: string;
+  fullName: string;
   template: Pick<FormTemplate, "id" | "name" | "category" | "schema">;
 }
 
-export function FillClient({ token, firstName, template }: FillClientProps) {
-  const [answers, setAnswers] = React.useState<Record<string, unknown>>({});
+export function FillClient({
+  token,
+  firstName,
+  fullName,
+  template,
+}: FillClientProps) {
+  // Prefilled from their profile so they don't retype it, still editable.
+  const [answers, setAnswers] = React.useState<Record<string, unknown>>(() => ({
+    client_name: fullName,
+  }));
   const [signature, setSignature] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);

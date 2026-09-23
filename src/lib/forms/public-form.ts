@@ -18,7 +18,12 @@ function supabase() {
 }
 
 export type PublicFormRequest =
-  | { status: "pending"; firstName: string; template: Pick<FormTemplate, "id" | "name" | "category" | "schema"> }
+  | {
+      status: "pending";
+      firstName: string;
+      fullName: string;
+      template: Pick<FormTemplate, "id" | "name" | "category" | "schema">;
+    }
   | { status: "completed" }
   | { status: "invalid" };
 
